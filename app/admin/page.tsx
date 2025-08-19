@@ -199,7 +199,7 @@ export default function AdminPage() {
               <Badge variant="secondary" className="bg-green-100 text-green-800">
                 أدمن منصة
               </Badge>
-              <Button variant="outline">
+              <Button variant="outline" onClick={() => router.push('/admin/settings')}>
                 <Settings className="h-4 w-4 ml-2" />
                 إعدادات المنصة
               </Button>
@@ -243,7 +243,7 @@ export default function AdminPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full">
+              <Button className="w-full" onClick={() => router.push('/admin/stores')}>
                 عرض جميع المتاجر
               </Button>
             </CardContent>
@@ -257,7 +257,7 @@ export default function AdminPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full">
+              <Button className="w-full" onClick={() => router.push('/admin/users')}>
                 عرض جميع المستخدمين
               </Button>
             </CardContent>
@@ -271,7 +271,7 @@ export default function AdminPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full">
+              <Button className="w-full" onClick={() => router.push('/admin/plans')}>
                 إدارة الخطط
               </Button>
             </CardContent>
@@ -285,7 +285,7 @@ export default function AdminPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full">
+              <Button className="w-full" onClick={() => router.push('/admin/reports')}>
                 عرض التقارير
               </Button>
             </CardContent>
