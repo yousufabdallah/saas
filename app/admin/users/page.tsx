@@ -27,7 +27,6 @@ export default function AdminUsersPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const router = useRouter();
   const supabase = createBrowserClient();
-  const supabase = createBrowserClient();
 
   useEffect(() => {
     checkAdminAndLoadUsers();

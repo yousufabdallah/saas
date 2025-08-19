@@ -29,7 +29,6 @@ export default function AdminStoresPage() {
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
   const router = useRouter();
   const supabase = createBrowserClient();
-  const supabase = createBrowserClient();
 
   useEffect(() => {
     checkAdminAndLoadStores();
