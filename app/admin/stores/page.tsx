@@ -36,12 +36,27 @@ export default function AdminStoresPage() {
 
   const checkAdminAndLoadStores = async () => {
     try {
-      // تجاوز مؤقت لمشاكل RLS
-      console.log('⚠️ [STORES PAGE] تجاوز مؤقت لمشاكل RLS');
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (error || !user) {
+        router.push('/auth/signin');
+        return;
+      }
+
+      // التحقق من صلاحيات الأدمن
+      const { data: isAdmin } = await supabase
+        .rpc('check_platform_admin', { user_id: user.id });
+
+      if (!isAdmin) {
+        toast.error('ليس لديك صلاحيات للوصول إلى هذه الصفحة');
+        router.push('/dashboard');
+        return;
+      }
+
       await loadStores();
     } catch (error) {
       console.error('خطأ في التحقق من الصلاحيات:', error);
-      await loadStores(); // تحميل البيانات الافتراضية
+      toast.error('حدث خطأ في التحقق من الصلاحيات');
     }
   };
 
@@ -49,47 +64,43 @@ export default function AdminStoresPage() {
     try {
       setLoading(true);
       
-      // استخدام بيانات افتراضية مؤقتاً
-      console.log('⚠️ [STORES PAGE] استخدام بيانات افتراضية');
-      const demoStores = [
+      // استخدام الدالة الآمنة لجلب المتاجر
+      const { data: storesData, error } = await supabase
+        .rpc('get_all_stores');
+
+      if (error) throw error;
+
+      // تحويل البيانات للتنسيق المطلوب
+      const formattedStores = (storesData || []).map(store => ({
+        id: store.id,
+        name: store.name,
+        slug: store.slug,
+        plan: store.plan,
+        active: store.active,
+        created_at: store.created_at,
+        owner_user_id: store.owner_user_id,
+        members_count: store.members_count || 0,
+        products_count: store.products_count || 0,
+      }));
+
+      setStores(formattedStores);
+    } catch (error) {
+      console.error('خطأ في تحميل المتاجر:', error);
+      // استخدام بيانات افتراضية في حالة الخطأ
+      setStores([
         {
           id: '1',
-          name: 'متجر الإلكترونيات',
-          slug: 'electronics-store',
+          name: 'متجر تجريبي',
+          slug: 'demo-store',
           plan: 'pro',
           active: true,
           created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-1',
-          members_count: 3,
-          products_count: 25,
-        },
-        {
-          id: '2',
-          name: 'متجر الأزياء',
-          slug: 'fashion-store',
-          plan: 'basic',
-          active: true,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-2',
+          owner_user_id: 'demo-user',
           members_count: 1,
-          products_count: 15,
-        },
-        {
-          id: '3',
-          name: 'متجر الكتب',
-          slug: 'books-store',
-          plan: 'enterprise',
-          active: false,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-3',
-          members_count: 2,
-          products_count: 50,
+          products_count: 5,
         }
-      ];
-      setStores(demoStores);
-    } catch (error) {
-      console.error('خطأ في تحميل المتاجر:', error);
-      toast.error('تم تحميل بيانات تجريبية مؤقتاً');
+      ]);
+      toast.error('تم تحميل بيانات تجريبية - تحقق من إعدادات قاعدة البيانات');
     } finally {
       setLoading(false);
     }
@@ -97,7 +108,19 @@ export default function AdminStoresPage() {
 
   const toggleStoreStatus = async (storeId: string, currentStatus: boolean) => {
     try {
-      // محاكاة تغيير الحالة
+      const { data, error } = await supabase
+        .rpc('toggle_store_status', { 
+          store_id: storeId, 
+          new_status: !currentStatus 
+        });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success(`تم ${!currentStatus ? 'تفعيل' : 'إلغاء تفعيل'} المتجر بنجاح`);
+      } else {
+        toast.error(data?.message || 'حدث خطأ في تغيير حالة المتجر');
+      }
       
       await loadStores();
     } catch (error) {

@@ -6,139 +6,137 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Search, Store, Users, Calendar, DollarSign } from 'lucide-react';
+import { ArrowLeft, Search, User, Calendar, Mail, Shield } from 'lucide-react';
 import { createBrowserClient } from '@/lib/supabase';
 import { toast } from 'sonner';
 
-interface Store {
+interface User {
   id: string;
-  name: string;
-  slug: string;
-  plan: string;
-  active: boolean;
+  email: string;
   created_at: string;
-  owner_email?: string;
-  members_count?: number;
-  products_count?: number;
+  last_sign_in_at?: string;
+  email_confirmed_at?: string;
+  is_platform_admin?: boolean;
+  stores_count?: number;
 }
 
-export default function AdminStoresPage() {
-  const [stores, setStores] = useState<Store[]>([]);
+export default function AdminUsersPage() {
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const router = useRouter();
   const supabase = createBrowserClient();
 
   useEffect(() => {
-    checkAdminAndLoadStores();
+    checkAdminAndLoadUsers();
   }, []);
 
-  const checkAdminAndLoadStores = async () => {
+  const checkAdminAndLoadUsers = async () => {
     try {
-      // تجاوز مؤقت لمشاكل RLS
-      console.log('⚠️ [STORES PAGE] تجاوز مؤقت لمشاكل RLS');
-      await loadStores();
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (error || !user) {
+        router.push('/auth/signin');
+        return;
+      }
+
+      // التحقق من صلاحيات الأدمن
+      const { data: isAdmin } = await supabase
+        .rpc('check_platform_admin', { user_id: user.id });
+
+      if (!isAdmin) {
+        toast.error('ليس لديك صلاحيات للوصول إلى هذه الصفحة');
+        router.push('/dashboard');
+        return;
+      }
+
+      await loadUsers();
     } catch (error) {
       console.error('خطأ في التحقق من الصلاحيات:', error);
-      await loadStores(); // تحميل البيانات الافتراضية
+      toast.error('حدث خطأ في التحقق من الصلاحيات');
     }
   };
 
-  const loadStores = async () => {
+  const loadUsers = async () => {
     try {
       setLoading(true);
       
-      // استخدام بيانات افتراضية مؤقتاً
-      console.log('⚠️ [STORES PAGE] استخدام بيانات افتراضية');
-      const demoStores = [
-        {
-          id: '1',
-          name: 'متجر الإلكترونيات',
-          slug: 'electronics-store',
-          plan: 'pro',
-          active: true,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-1',
-          members_count: 3,
-          products_count: 25,
-        },
-        {
-          id: '2',
-          name: 'متجر الأزياء',
-          slug: 'fashion-store',
-          plan: 'basic',
-          active: true,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-2',
-          members_count: 1,
-          products_count: 15,
-        },
-        {
-          id: '3',
-          name: 'متجر الكتب',
-          slug: 'books-store',
-          plan: 'enterprise',
-          active: false,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-3',
-          members_count: 2,
-          products_count: 50,
-        }
-      ];
-      setStores(demoStores);
+      // استخدام الدالة الآمنة لجلب المستخدمين
+      const { data: usersData, error } = await supabase
+        .rpc('get_all_users');
+
+      if (error) throw error;
+
+      // تحويل البيانات للتنسيق المطلوب
+      const formattedUsers = (usersData || []).map(user => ({
+        id: user.user_id,
+        email: user.email,
+        created_at: user.created_at,
+        is_platform_admin: user.is_platform_admin,
+        stores_count: user.stores_count,
+      }));
+
+      setUsers(formattedUsers);
     } catch (error) {
-      console.error('خطأ في تحميل المتاجر:', error);
-      toast.error('تم تحميل بيانات تجريبية مؤقتاً');
+      console.error('خطأ في تحميل المستخدمين:', error);
+      // استخدام بيانات افتراضية في حالة الخطأ
+      setUsers([
+        {
+          id: 'demo-user-1',
+          email: 'user1@example.com',
+          created_at: new Date().toISOString(),
+          is_platform_admin: false,
+          stores_count: 1,
+        },
+        {
+          id: 'demo-user-2',
+          email: 'admin@example.com',
+          created_at: new Date().toISOString(),
+          is_platform_admin: true,
+          stores_count: 2,
+        }
+      ]);
+      toast.error('تم تحميل بيانات تجريبية - تحقق من إعدادات قاعدة البيانات');
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleStoreStatus = async (storeId: string, currentStatus: boolean) => {
+  const toggleAdminStatus = async (userId: string, isCurrentlyAdmin: boolean) => {
     try {
-      // محاكاة تغيير الحالة
-      
-      await loadStores();
+      const { data, error } = await supabase
+        .rpc('toggle_admin_status', { 
+          target_user_id: userId, 
+          is_admin: !isCurrentlyAdmin 
+        });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success(data.message);
+      } else {
+        toast.error(data?.message || 'حدث خطأ في تغيير صلاحيات الأدمن');
+      }
+
+      await loadUsers();
     } catch (error) {
-      console.error('خطأ في تغيير حالة المتجر:', error);
-      toast.error('حدث خطأ في تغيير حالة المتجر');
+      console.error('خطأ في تغيير صلاحيات الأدمن:', error);
+      toast.error('حدث خطأ في تغيير صلاحيات الأدمن');
     }
   };
 
-  const filteredStores = stores.filter(store =>
-    store.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    store.slug.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredUsers = users.filter(user =>
+    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  const getPlanBadgeColor = (plan: string) => {
-    switch (plan) {
-      case 'pro':
-        return 'bg-purple-100 text-purple-800';
-      case 'enterprise':
-        return 'bg-blue-100 text-blue-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getPlanName = (plan: string) => {
-    switch (plan) {
-      case 'pro':
-        return 'احترافية';
-      case 'enterprise':
-        return 'مؤسسية';
-      default:
-        return 'أساسية';
-    }
-  };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">جار تحميل المتاجر...</p>
+          <p className="text-gray-600">جار تحميل المستخدمين...</p>
         </div>
       </div>
     );
@@ -156,9 +154,9 @@ export default function AdminStoresPage() {
                 العودة
               </Button>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">إدارة المتاجر</h1>
+                <h1 className="text-3xl font-bold text-gray-900">إدارة المستخدمين</h1>
                 <p className="text-gray-600 mt-1">
-                  عرض وإدارة جميع المتاجر في المنصة
+                  عرض وإدارة حسابات المستخدمين في المنصة
                 </p>
               </div>
             </div>
@@ -174,7 +172,7 @@ export default function AdminStoresPage() {
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
-                placeholder="البحث في المتاجر..."
+                placeholder="البحث في المستخدمين..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -182,79 +180,75 @@ export default function AdminStoresPage() {
             </div>
             <div className="flex items-center space-x-4 space-x-reverse">
               <Badge variant="secondary">
-                إجمالي المتاجر: {stores.length}
+                إجمالي المستخدمين: {users.length}
               </Badge>
-              <Badge variant="secondary" className="bg-green-100 text-green-800">
-                نشط: {stores.filter(s => s.active).length}
-              </Badge>
-              <Badge variant="secondary" className="bg-red-100 text-red-800">
-                غير نشط: {stores.filter(s => !s.active).length}
+              <Badge variant="secondary" className="bg-purple-100 text-purple-800">
+                أدمن المنصة: {users.filter(u => u.is_platform_admin).length}
               </Badge>
             </div>
           </div>
         </div>
 
-        {/* Stores Grid */}
+        {/* Users Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredStores.map((store) => (
-            <Card key={store.id} className="hover:shadow-lg transition-shadow">
+          {filteredUsers.map((user) => (
+            <Card key={user.id} className="hover:shadow-lg transition-shadow">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2 space-x-reverse">
-                    <Store className="h-5 w-5 text-blue-600" />
-                    <CardTitle className="text-lg">{store.name}</CardTitle>
+                    <User className="h-5 w-5 text-blue-600" />
+                    <CardTitle className="text-lg">
+                      {user.email.split('@')[0]}
+                    </CardTitle>
                   </div>
-                  <Badge className={getPlanBadgeColor(store.plan)}>
-                    {getPlanName(store.plan)}
-                  </Badge>
+                  {user.is_platform_admin && (
+                    <Badge className="bg-purple-100 text-purple-800">
+                      <Shield className="h-3 w-3 ml-1" />
+                      أدمن
+                    </Badge>
+                  )}
                 </div>
                 <CardDescription>
-                  {store.slug}.saasy.com
+                  ID: {user.id.slice(0, 8)}...
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center space-x-2 space-x-reverse">
-                      <Users className="h-4 w-4 text-gray-500" />
-                      <span>الأعضاء</span>
+                      <Mail className="h-4 w-4 text-gray-500" />
+                      <span>البريد الإلكتروني</span>
                     </div>
-                    <span className="font-medium">{store.members_count}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <DollarSign className="h-4 w-4 text-gray-500" />
-                      <span>المنتجات</span>
-                    </div>
-                    <span className="font-medium">{store.products_count}</span>
+                    <span className="font-medium text-xs">
+                      {user.email.length > 20 ? user.email.slice(0, 20) + '...' : user.email}
+                    </span>
                   </div>
                   
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center space-x-2 space-x-reverse">
                       <Calendar className="h-4 w-4 text-gray-500" />
-                      <span>تاريخ الإنشاء</span>
+                      <span>تاريخ التسجيل</span>
                     </div>
                     <span className="font-medium">
-                      {new Date(store.created_at).toLocaleDateString('ar-SA')}
+                      {new Date(user.created_at).toLocaleDateString('ar-SA')}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <Badge 
-                      className={store.active 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                      }
-                    >
-                      {store.active ? 'نشط' : 'غير نشط'}
+                  <div className="flex items-center justify-between text-sm">
+                    <span>عدد المتاجر</span>
+                    <Badge variant="outline">
+                      {user.stores_count}
                     </Badge>
+                  </div>
+
+                  <div className="pt-2">
                     <Button
-                      variant="outline"
+                      variant={user.is_platform_admin ? "destructive" : "default"}
                       size="sm"
-                      onClick={() => toggleStoreStatus(store.id, store.active)}
+                      className="w-full"
+                      onClick={() => toggleAdminStatus(user.id, user.is_platform_admin || false)}
                     >
-                      {store.active ? 'إلغاء التفعيل' : 'تفعيل'}
+                      {user.is_platform_admin ? 'إزالة صلاحيات الأدمن' : 'إضافة صلاحيات الأدمن'}
                     </Button>
                   </div>
                 </div>
@@ -263,14 +257,14 @@ export default function AdminStoresPage() {
           ))}
         </div>
 
-        {filteredStores.length === 0 && (
+        {filteredUsers.length === 0 && (
           <div className="text-center py-12">
-            <Store className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              لا توجد متاجر
+              لا توجد مستخدمين
             </h3>
             <p className="text-gray-600">
-              {searchTerm ? 'لم يتم العثور على متاجر تطابق البحث' : 'لم يتم إنشاء أي متاجر بعد'}
+              {searchTerm ? 'لم يتم العثور على مستخدمين يطابقون البحث' : 'لم يتم تسجيل أي مستخدمين بعد'}
             </p>
           </div>
         )}
