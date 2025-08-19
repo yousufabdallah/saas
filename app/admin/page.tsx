@@ -199,10 +199,6 @@ export default function AdminPage() {
               <Badge variant="secondary" className="bg-green-100 text-green-800">
                 أدمن منصة
               </Badge>
-              <Button variant="outline" onClick={() => router.push('/admin/settings')}>
-                <Settings className="h-4 w-4 ml-2" />
-                إعدادات المنصة
-              </Button>
               <Button variant="outline" onClick={handleSignOut}>
                 <LogOut className="h-4 w-4 ml-2" />
                 تسجيل الخروج

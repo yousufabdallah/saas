@@ -36,7 +36,6 @@ export default function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const router = useRouter();
-  const supabase = createBrowserClient();
 
   useEffect(() => {
     checkAdminAndLoadSettings();

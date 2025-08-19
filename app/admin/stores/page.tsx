@@ -26,6 +26,7 @@ export default function AdminStoresPage() {
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
   const router = useRouter();
   const supabase = createBrowserClient();
 

@@ -29,7 +29,6 @@ export default function AdminPlansPage() {
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const router = useRouter();
-  const supabase = createBrowserClient();
 
   const [formData, setFormData] = useState({
     id: '',
