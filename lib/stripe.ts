@@ -1,12 +1,12 @@
 import Stripe from 'stripe';
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder', {
   apiVersion: '2025-07-30.basil',
 });
 
 export const plans = {
   basic: {
-    priceId: process.env.STRIPE_PRICE_BASIC!,
+    priceId: process.env.STRIPE_PRICE_BASIC || 'price_placeholder_basic',
     price: 29,
     features: [
       'حتى 100 منتج',
@@ -16,7 +16,7 @@ export const plans = {
     ],
   },
   pro: {
-    priceId: process.env.STRIPE_PRICE_PRO!,
+    priceId: process.env.STRIPE_PRICE_PRO || 'price_placeholder_pro',
     price: 79,
     features: [
       'منتجات غير محدودة',

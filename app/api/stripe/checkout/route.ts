@@ -3,6 +3,14 @@ import { stripe } from '@/lib/stripe';
 
 export async function POST(req: NextRequest) {
   try {
+    // Check if Stripe is properly configured
+    if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_placeholder') {
+      return NextResponse.json(
+        { error: 'Stripe is not configured. Please set STRIPE_SECRET_KEY environment variable.' },
+        { status: 500 }
+      );
+    }
+
     const { plan, email, userId } = await req.json();
 
     if (!plan || !email) {

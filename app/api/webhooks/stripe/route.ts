@@ -3,11 +3,19 @@ import Stripe from 'stripe';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { generateStoreSlug } from '@/lib/tenancy';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder', {
   apiVersion: '2025-07-30.basil',
 });
 
 export async function POST(req: NextRequest) {
+  // Check if Stripe is properly configured
+  if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_placeholder') {
+    return NextResponse.json(
+      { error: 'Stripe webhook is not configured. Please set STRIPE_SECRET_KEY environment variable.' },
+      { status: 500 }
+    );
+  }
+
   const sig = req.headers.get('stripe-signature')!;
   const rawBody = await req.text();
   let event: Stripe.Event;
@@ -16,7 +24,7 @@ export async function POST(req: NextRequest) {
     event = stripe.webhooks.constructEvent(
       rawBody,
       sig,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      process.env.STRIPE_WEBHOOK_SECRET || 'whsec_placeholder'
     );
   } catch (err: any) {
     console.error(`Webhook signature verification failed: ${err.message}`);
