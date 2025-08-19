@@ -22,6 +22,7 @@ export default function SignInPage() {
     setLoading(true);
     
     console.log('🔐 بدء عملية تسجيل الدخول...');
+    console.log('📧 البريد الإلكتروني:', email);
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -30,55 +31,68 @@ export default function SignInPage() {
       });
 
       if (error) {
+        console.error('❌ خطأ في تسجيل الدخول:', error);
         throw error;
       }
       
-      console.log('✅ تم تسجيل الدخول بنجاح:', data.user?.email);
+      console.log('✅ تم تسجيل الدخول بنجاح');
+      console.log('👤 بيانات المستخدم:', {
+        id: data.user?.id,
+        email: data.user?.email,
+        created_at: data.user?.created_at
+      });
 
       toast.success('تم تسجيل الدخول بنجاح!');
       
       // التحقق من صلاحيات الأدمن
       if (data.user?.id) {
-        console.log('🔍 فحص صلاحيات الأدمن للمستخدم:', data.user.id);
-        console.log('📧 البريد الإلكتروني:', data.user.email);
+        console.log('🔍 فحص صلاحيات الأدمن...');
         
-        const { data: adminData, error: adminError } = await supabase
-          .from('platform_admins')
-          .select('user_id')
-          .eq('user_id', data.user.id)
-          .single();
+        // استعلام مباشر لفحص الأدمن
+        const { data: adminCheck, error: adminError } = await supabase
+          .rpc('check_platform_admin', { user_id: data.user.id });
         
-        console.log('📊 نتيجة فحص الأدمن:', { 
-          adminData, 
-          adminError: adminError?.message,
-          adminErrorCode: adminError?.code,
-          userId: data.user.id,
-          userEmail: data.user.email 
-        });
+        console.log('📊 نتيجة فحص الأدمن (RPC):', { adminCheck, adminError });
         
-        if (adminData && !adminError) {
-          console.log('✅ المستخدم أدمن منصة - توجيه إلى لوحة الأدمن');
-          // استخدام window.location بدلاً من router.push لتجنب مشاكل التنقل
-          window.location.href = '/admin';
-          return;
-        } else {
-          console.log('❌ المستخدم ليس أدمن منصة');
-          console.log('تفاصيل الخطأ:', adminError);
-          console.log('🔄 توجيه إلى لوحة التحكم العادية');
-          window.location.href = '/dashboard';
+        // استعلام بديل إذا فشل RPC
+        if (adminError) {
+          console.log('🔄 استخدام استعلام بديل...');
+          const { data: adminData, error: adminError2 } = await supabase
+            .from('platform_admins')
+            .select('user_id')
+            .eq('user_id', data.user.id)
+            .single();
+          
+          console.log('📊 نتيجة الاستعلام البديل:', { 
+            adminData, 
+            adminError2: adminError2?.message,
+            adminErrorCode: adminError2?.code 
+          });
+          
+          if (adminData && !adminError2) {
+            console.log('✅ المستخدم أدمن منصة - توجيه إلى /admin');
+            // تأخير قصير قبل التوجيه
+            setTimeout(() => {
+              window.location.href = '/admin';
+            }, 500);
+            return;
+          }
+        } else if (adminCheck) {
+          console.log('✅ المستخدم أدمن منصة (RPC) - توجيه إلى /admin');
+          setTimeout(() => {
+            window.location.href = '/admin';
+          }, 500);
           return;
         }
+        
+        console.log('❌ المستخدم ليس أدمن منصة - توجيه إلى /dashboard');
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 500);
       }
     } catch (error) {
-      console.error('Sign in error:', error);
+      console.error('❌ خطأ في تسجيل الدخول:', error);
       toast.error(error instanceof Error ? error.message : 'خطأ في تسجيل الدخول');
-      
-      // إذا كانت المشكلة في إعدادات Supabase، اعرض رسالة توضيحية  
-      if (error instanceof Error && error.message.includes('يجب إعداد Supabase')) {
-        toast.error('يجب إعداد Supabase أولاً. تحقق من ملف .env.local', {
-          duration: 5000,
-        });
-      }
     } finally {
       setLoading(false);
     }
@@ -101,17 +115,25 @@ export default function SignInPage() {
         throw error;
       }
 
-      toast.success('تم إنشاء الحساب بنجاح! يرجى التحقق من بريدك الإلكتروني');
-    } catch (error) {
-      console.error('Sign up error:', error);
-      toast.error(error instanceof Error ? error.message : 'خطأ في إنشاء الحساب');
+      console.log('✅ تم إنشاء الحساب:', data.user?.email);
+      toast.success('تم إنشاء الحساب بنجاح!');
       
-      // إذا كانت المشكلة في إعدادات Supabase، اعرض رسالة توضيحية
-      if (error instanceof Error && error.message.includes('يجب إعداد Supabase')) {
-        toast.error('يجب إعداد Supabase أولاً. تحقق من ملف .env.local', {
-          duration: 5000,
-        });
+      // إذا كان البريد الإلكتروني هو الأدمن، أضفه تلقائياً
+      if (email === 'yousufalbahlouli@hotmail.com' && data.user?.id) {
+        console.log('🔧 إضافة المستخدم كأدمن منصة...');
+        const { error: adminError } = await supabase
+          .from('platform_admins')
+          .insert({ user_id: data.user.id });
+        
+        if (adminError) {
+          console.error('❌ خطأ في إضافة الأدمن:', adminError);
+        } else {
+          console.log('✅ تم إضافة المستخدم كأدمن منصة');
+        }
       }
+    } catch (error) {
+      console.error('❌ خطأ في إنشاء الحساب:', error);
+      toast.error(error instanceof Error ? error.message : 'خطأ في إنشاء الحساب');
     } finally {
       setLoading(false);
     }
