@@ -4,7 +4,11 @@ export const createBrowserClient = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
-  if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'your_supabase_project_url' || supabaseAnonKey === 'your_supabase_anon_key') {
+  if (!supabaseUrl || !supabaseAnonKey || 
+      supabaseUrl === 'your_supabase_project_url' || 
+      supabaseAnonKey === 'your_supabase_anon_key' ||
+      supabaseUrl === 'https://your-project.supabase.co' ||
+      supabaseAnonKey === 'your_anon_key_here') {
     // Return a mock client for build-time when env vars are missing
     return {
       auth: {
