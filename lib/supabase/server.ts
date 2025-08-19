@@ -15,7 +15,7 @@ export const createServerSupabaseClient = () => {
   );
 };
 
-export const createServerClient = () => {
+export const createRouteHandlerClient = () => {
   const cookieStore = cookies();
   
   return createServerClient(
