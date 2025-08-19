@@ -5,10 +5,7 @@ export const createBrowserClient = () => {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
   // التحقق من وجود متغيرات البيئة
-  if (!supabaseUrl || !supabaseAnonKey || 
-      supabaseUrl === 'https://hvkiutapcccmhrijkquo.supabase.co' || 
-      supabaseAnonKey === 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2a2l1dGFwY2NjbWhyaWprcXVvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU2MjEyMDgsImV4cCI6MjA3MTE5NzIwOH0.bXwCp-2CtVgfjtYfyZsNFsriWN6aDydEHI0gPcxE8WA') {
-    
+  if (!supabaseUrl || !supabaseAnonKey) {
     console.warn('⚠️ Supabase غير مُعرّف. يرجى إعداد متغيرات البيئة في .env.local');
     
     // إرجاع client وهمي للتطوير

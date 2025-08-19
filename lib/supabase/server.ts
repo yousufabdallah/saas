@@ -7,10 +7,7 @@ export const createServerSupabaseClient = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   
-  if (!supabaseUrl || !supabaseServiceKey ||
-      supabaseUrl === 'https://your-project.supabase.co' ||
-      supabaseServiceKey === 'your_service_role_key_here') {
-    
+  if (!supabaseUrl || !supabaseServiceKey) {
     console.warn('⚠️ Supabase Server غير مُعرّف');
     
     // إرجاع client وهمي
@@ -47,10 +44,7 @@ export const createRouteHandlerClient = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
-  if (!supabaseUrl || !supabaseAnonKey ||
-      supabaseUrl === 'https://your-project.supabase.co' ||
-      supabaseAnonKey === 'your_anon_key_here') {
-    
+  if (!supabaseUrl || !supabaseAnonKey) {
     return {
       auth: {
         getUser: () => Promise.resolve({ data: { user: null }, error: new Error('Supabase not configured') }),
@@ -99,10 +93,7 @@ export const createMiddlewareClient = (request: NextRequest) => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
-  if (!supabaseUrl || !supabaseAnonKey ||
-      supabaseUrl === 'https://your-project.supabase.co' ||
-      supabaseAnonKey === 'your_anon_key_here') {
-    
+  if (!supabaseUrl || !supabaseAnonKey) {
     const response = NextResponse.next({
       request: { headers: request.headers }
     });
