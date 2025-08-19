@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createMiddlewareClient } from '@/lib/supabase';
+import { createMiddlewareClient } from '@/lib/supabase/server';
 
 export function middleware(req: NextRequest) {
   // Handle authentication

@@ -1,4 +1,5 @@
-import { createServerClient, createBrowserClient } from './supabase';
+import { createServerClient } from './supabase/server';
+import { createBrowserClient } from './supabase';
 import { redirect } from 'next/navigation';
 
 export async function getUser() {
