@@ -6,8 +6,8 @@ export const createBrowserClient = () => {
   
   // التحقق من وجود متغيرات البيئة
   if (!supabaseUrl || !supabaseAnonKey || 
-      supabaseUrl === 'https://your-project.supabase.co' || 
-      supabaseAnonKey === 'your_anon_key_here') {
+      supabaseUrl === 'https://hvkiutapcccmhrijkquo.supabase.co' || 
+      supabaseAnonKey === 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2a2l1dGFwY2NjbWhyaWprcXVvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU2MjEyMDgsImV4cCI6MjA3MTE5NzIwOH0.bXwCp-2CtVgfjtYfyZsNFsriWN6aDydEHI0gPcxE8WA') {
     
     console.warn('⚠️ Supabase غير مُعرّف. يرجى إعداد متغيرات البيئة في .env.local');
     
