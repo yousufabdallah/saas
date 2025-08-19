@@ -32,13 +32,18 @@ export async function requireAuth() {
 export async function isPlatformAdmin(userId: string) {
   const supabase = createServerSupabaseClient();
   
-  const { data, error } = await supabase
-    .from('platform_admins')
-    .select('user_id')
-    .eq('user_id', userId)
-    .single();
-    
-  return !error && !!data;
+  try {
+    const { data, error } = await supabase
+      .from('platform_admins')
+      .select('user_id')
+      .eq('user_id', userId)
+      .single();
+      
+    return !error && !!data;
+  } catch (error) {
+    console.error('Error checking platform admin status:', error);
+    return false;
+  }
 }
 
 export async function getUserStores(userId: string) {

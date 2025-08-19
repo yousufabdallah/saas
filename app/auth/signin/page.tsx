@@ -32,7 +32,19 @@ export default function SignInPage() {
       }
 
       toast.success('تم تسجيل الدخول بنجاح!');
-      router.push('/dashboard');
+      
+      // التحقق من صلاحيات الأدمن
+      const { data: adminData } = await supabase
+        .from('platform_admins')
+        .select('user_id')
+        .eq('user_id', data.user?.id)
+        .single();
+      
+      if (adminData) {
+        router.push('/admin');
+      } else {
+        router.push('/dashboard');
+      }
       router.refresh();
     } catch (error) {
       console.error('Sign in error:', error);
