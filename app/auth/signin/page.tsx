@@ -56,16 +56,19 @@ export default function SignInPage() {
           userEmail: data.user.email 
         });
         
-        if (adminData && adminError?.code !== 'PGRST116') {
+        if (adminData && !adminError) {
           console.log('✅ المستخدم أدمن منصة - توجيه إلى لوحة الأدمن');
-          router.push('/admin');
+          // استخدام window.location بدلاً من router.push لتجنب مشاكل التنقل
+          window.location.href = '/admin';
+          return;
         } else {
-          console.log('❌ المستخدم ليس أدمن منصة - توجيه إلى لوحة التحكم العادية');
+          console.log('❌ المستخدم ليس أدمن منصة');
           console.log('تفاصيل الخطأ:', adminError);
-          router.push('/dashboard');
+          console.log('🔄 توجيه إلى لوحة التحكم العادية');
+          window.location.href = '/dashboard';
+          return;
         }
       }
-      router.refresh();
     } catch (error) {
       console.error('Sign in error:', error);
       toast.error(error instanceof Error ? error.message : 'خطأ في تسجيل الدخول');

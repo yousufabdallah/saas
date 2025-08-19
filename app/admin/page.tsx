@@ -25,13 +25,16 @@ export default function AdminPage() {
   useEffect(() => {
     const checkAdminAccess = async () => {
       try {
+        console.log('🔍 فحص وصول الأدمن...');
         const { data: { user }, error } = await supabase.auth.getUser();
         
         if (error || !user) {
+          console.log('❌ لا يوجد مستخدم مسجل دخول');
           router.push('/auth/signin');
           return;
         }
 
+        console.log('👤 المستخدم الحالي:', user.email);
         setUser(user);
 
         // التحقق من صلاحيات الأدمن
@@ -41,12 +44,20 @@ export default function AdminPage() {
           .eq('user_id', user.id)
           .single();
 
-        if (adminError || !adminData) {
+        console.log('🔍 نتيجة فحص صلاحيات الأدمن:', {
+          adminData,
+          adminError: adminError?.message,
+          adminErrorCode: adminError?.code
+        });
+
+        if (adminError && adminError.code !== 'PGRST116' || !adminData) {
+          console.log('❌ المستخدم ليس أدمن منصة');
           toast.error('ليس لديك صلاحيات للوصول إلى لوحة الأدمن');
           router.push('/dashboard');
           return;
         }
 
+        console.log('✅ المستخدم أدمن منصة - عرض لوحة الأدمن');
         setIsAdmin(true);
         await loadStats();
       } catch (error) {
