@@ -6,27 +6,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Search, Store, Users, Calendar, DollarSign } from 'lucide-react';
+import { ArrowLeft, Search, Store, Users, Calendar, DollarSign, Package, ShoppingCart } from 'lucide-react';
 import { createBrowserClient } from '@/lib/supabase';
 import { toast } from 'sonner';
 
-interface Store {
+interface RealStore {
   id: string;
   name: string;
   slug: string;
   plan: string;
   active: boolean;
   created_at: string;
-  owner_email?: string;
-  members_count?: number;
-  products_count?: number;
+  owner_user_id: string;
+  owner_email: string;
+  members_count: number;
+  products_count: number;
+  orders_count: number;
+  total_revenue: number;
 }
 
 export default function AdminStoresPage() {
-  const [stores, setStores] = useState<Store[]>([]);
+  const [stores, setStores] = useState<RealStore[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
   const router = useRouter();
   const supabase = createBrowserClient();
 
@@ -36,60 +38,65 @@ export default function AdminStoresPage() {
 
   const checkAdminAndLoadStores = async () => {
     try {
-      // تجاوز مؤقت لمشاكل RLS
-      console.log('⚠️ [STORES PAGE] تجاوز مؤقت لمشاكل RLS');
-      await loadStores();
+      console.log('🔍 [STORES PAGE] فحص المستخدم...');
+      
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (error || !user) {
+        console.log('❌ [STORES PAGE] المستخدم غير مسجل دخول');
+        router.push('/auth/signin');
+        return;
+      }
+
+      console.log('✅ [STORES PAGE] المستخدم مسجل دخول:', user.email);
+
+      // التحقق من صلاحيات الأدمن
+      const { data: isAdmin, error: adminError } = await supabase
+        .rpc('check_platform_admin', { user_id: user.id });
+
+      if (adminError || !isAdmin) {
+        console.log('❌ [STORES PAGE] المستخدم ليس أدمن منصة');
+        toast.error('ليس لديك صلاحيات للوصول إلى هذه الصفحة');
+        router.push('/dashboard');
+        return;
+      }
+
+      console.log('✅ [STORES PAGE] المستخدم أدمن منصة مؤكد');
+      await loadRealStores();
     } catch (error) {
-      console.error('خطأ في التحقق من الصلاحيات:', error);
-      await loadStores(); // تحميل البيانات الافتراضية
+      console.error('❌ [STORES PAGE] خطأ في التحقق من الصلاحيات:', error);
+      toast.error('حدث خطأ في التحقق من الصلاحيات');
     }
   };
 
-  const loadStores = async () => {
+  const loadRealStores = async () => {
     try {
       setLoading(true);
+      console.log('🏪 [STORES PAGE] تحميل المتاجر الحقيقية...');
       
-      // استخدام بيانات افتراضية مؤقتاً
-      console.log('⚠️ [STORES PAGE] استخدام بيانات افتراضية');
-      const demoStores = [
-        {
-          id: '1',
-          name: 'متجر الإلكترونيات',
-          slug: 'electronics-store',
-          plan: 'pro',
-          active: true,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-1',
-          members_count: 3,
-          products_count: 25,
-        },
-        {
-          id: '2',
-          name: 'متجر الأزياء',
-          slug: 'fashion-store',
-          plan: 'basic',
-          active: true,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-2',
-          members_count: 1,
-          products_count: 15,
-        },
-        {
-          id: '3',
-          name: 'متجر الكتب',
-          slug: 'books-store',
-          plan: 'enterprise',
-          active: false,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-3',
-          members_count: 2,
-          products_count: 50,
-        }
-      ];
-      setStores(demoStores);
+      // استخدام الدالة الجديدة للمتاجر الحقيقية
+      const { data: realStores, error } = await supabase.rpc('get_all_real_stores');
+
+      if (error) {
+        console.error('❌ [STORES PAGE] خطأ في تحميل المتاجر:', error);
+        toast.error('حدث خطأ في تحميل المتاجر: ' + error.message);
+        setStores([]);
+        return;
+      }
+
+      console.log('✅ [STORES PAGE] تم تحميل المتاجر الحقيقية:', realStores?.length || 0);
+      console.log('📋 [STORES PAGE] قائمة المتاجر:', realStores);
+
+      setStores(realStores || []);
+
+      if (!realStores || realStores.length === 0) {
+        console.log('⚠️ [STORES PAGE] لا توجد متاجر حقيقية');
+        toast.info('لا توجد متاجر حقيقية بعد. سيتم إنشاء متاجر عند تسجيل المستخدمين.');
+      }
     } catch (error) {
-      console.error('خطأ في تحميل المتاجر:', error);
-      toast.error('تم تحميل بيانات تجريبية مؤقتاً');
+      console.error('❌ [STORES PAGE] خطأ في تحميل المتاجر:', error);
+      toast.error('حدث خطأ في تحميل المتاجر');
+      setStores([]);
     } finally {
       setLoading(false);
     }
@@ -97,18 +104,37 @@ export default function AdminStoresPage() {
 
   const toggleStoreStatus = async (storeId: string, currentStatus: boolean) => {
     try {
-      // محاكاة تغيير الحالة
+      console.log('🔧 [STORES PAGE] تغيير حالة المتجر:', storeId);
       
-      await loadStores();
+      const { data: result, error } = await supabase.rpc('toggle_store_status_safe', {
+        store_id: storeId,
+        new_status: !currentStatus,
+      });
+
+      if (error) {
+        console.error('❌ [STORES PAGE] خطأ في تغيير حالة المتجر:', error);
+        toast.error('حدث خطأ في تغيير حالة المتجر');
+        return;
+      }
+
+      console.log('✅ [STORES PAGE] نتيجة تغيير الحالة:', result);
+
+      if (result?.success) {
+        toast.success(result.message);
+        await loadRealStores();
+      } else {
+        toast.error(result?.message || 'فشل في تغيير حالة المتجر');
+      }
     } catch (error) {
-      console.error('خطأ في تغيير حالة المتجر:', error);
+      console.error('❌ [STORES PAGE] خطأ في تغيير حالة المتجر:', error);
       toast.error('حدث خطأ في تغيير حالة المتجر');
     }
   };
 
   const filteredStores = stores.filter(store =>
     store.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    store.slug.toLowerCase().includes(searchTerm.toLowerCase())
+    store.slug.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    store.owner_email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getPlanBadgeColor = (plan: string) => {
@@ -158,7 +184,7 @@ export default function AdminStoresPage() {
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">إدارة المتاجر</h1>
                 <p className="text-gray-600 mt-1">
-                  عرض وإدارة جميع المتاجر في المنصة
+                  جميع المتاجر النشطة في المنصة
                 </p>
               </div>
             </div>
@@ -215,6 +241,11 @@ export default function AdminStoresPage() {
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">صاحب المتجر:</span>
+                    <span className="font-medium">{store.owner_email}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center space-x-2 space-x-reverse">
                       <Users className="h-4 w-4 text-gray-500" />
                       <span>الأعضاء</span>
@@ -224,10 +255,28 @@ export default function AdminStoresPage() {
                   
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center space-x-2 space-x-reverse">
-                      <DollarSign className="h-4 w-4 text-gray-500" />
+                      <Package className="h-4 w-4 text-gray-500" />
                       <span>المنتجات</span>
                     </div>
                     <span className="font-medium">{store.products_count}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center space-x-2 space-x-reverse">
+                      <ShoppingCart className="h-4 w-4 text-gray-500" />
+                      <span>الطلبات</span>
+                    </div>
+                    <span className="font-medium">{store.orders_count}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center space-x-2 space-x-reverse">
+                      <DollarSign className="h-4 w-4 text-gray-500" />
+                      <span>الإيرادات</span>
+                    </div>
+                    <span className="font-medium text-green-600">
+                      {store.total_revenue.toFixed(2)} ر.س
+                    </span>
                   </div>
                   
                   <div className="flex items-center justify-between text-sm">
@@ -240,7 +289,7 @@ export default function AdminStoresPage() {
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between pt-2">
                     <Badge 
                       className={store.active 
                         ? 'bg-green-100 text-green-800' 
@@ -267,11 +316,26 @@ export default function AdminStoresPage() {
           <div className="text-center py-12">
             <Store className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              لا توجد متاجر
+              {stores.length === 0 ? 'لا توجد متاجر حقيقية' : 'لا توجد نتائج للبحث'}
             </h3>
-            <p className="text-gray-600">
-              {searchTerm ? 'لم يتم العثور على متاجر تطابق البحث' : 'لم يتم إنشاء أي متاجر بعد'}
+            <p className="text-gray-600 mb-4">
+              {stores.length === 0 
+                ? 'لم يتم إنشاء أي متاجر حقيقية بعد. ستظهر المتاجر هنا عند تسجيل المستخدمين.'
+                : 'لم يتم العثور على متاجر تطابق البحث'
+              }
             </p>
+            {stores.length === 0 && (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-500">
+                  💡 نصائح:
+                </p>
+                <ul className="text-sm text-gray-500 space-y-1">
+                  <li>• المتاجر تُنشأ تلقائياً عند تسجيل المستخدمين</li>
+                  <li>• يمكن إنشاء متاجر من صفحة إدارة المستخدمين</li>
+                  <li>• جميع المتاجر مجانية ونشطة فوراً</li>
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </div>
