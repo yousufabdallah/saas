@@ -4,138 +4,116 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Search, Store, Users, Calendar, DollarSign } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { ArrowLeft, Save, Settings, Shield, Mail, Globe } from 'lucide-react';
 import { createBrowserClient } from '@/lib/supabase';
 import { toast } from 'sonner';
 
-interface Store {
-  id: string;
-  name: string;
-  slug: string;
-  plan: string;
-  active: boolean;
-  created_at: string;
-  owner_email?: string;
-  members_count?: number;
-  products_count?: number;
+interface PlatformSettings {
+  platform_name: string;
+  support_email: string;
+  allow_registration: boolean;
+  require_email_verification: boolean;
+  max_stores_per_user: number;
+  default_plan: string;
+  maintenance_mode: boolean;
+  maintenance_message: string;
 }
 
-export default function AdminStoresPage() {
-  const [stores, setStores] = useState<Store[]>([]);
+export default function AdminSettingsPage() {
+  const [settings, setSettings] = useState<PlatformSettings>({
+    platform_name: 'SaaSy',
+    support_email: 'support@saasy.com',
+    allow_registration: true,
+    require_email_verification: false,
+    max_stores_per_user: 1,
+    default_plan: 'basic',
+    maintenance_mode: false,
+    maintenance_message: 'المنصة قيد الصيانة، سنعود قريباً',
+  });
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
+  const [saving, setSaving] = useState(false);
   const router = useRouter();
   const supabase = createBrowserClient();
 
   useEffect(() => {
-    checkAdminAndLoadStores();
+    checkAdminAndLoadSettings();
   }, []);
 
-  const checkAdminAndLoadStores = async () => {
+  const checkAdminAndLoadSettings = async () => {
     try {
-      // تجاوز مؤقت لمشاكل RLS
-      console.log('⚠️ [STORES PAGE] تجاوز مؤقت لمشاكل RLS');
-      await loadStores();
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (error || !user) {
+        router.push('/auth/signin');
+        return;
+      }
+
+      // التحقق من صلاحيات الأدمن
+      const { data: isAdmin } = await supabase
+        .rpc('check_platform_admin', { user_id: user.id });
+
+      if (!isAdmin) {
+        toast.error('ليس لديك صلاحيات للوصول إلى هذه الصفحة');
+        router.push('/dashboard');
+        return;
+      }
+
+      await loadSettings();
     } catch (error) {
       console.error('خطأ في التحقق من الصلاحيات:', error);
-      await loadStores(); // تحميل البيانات الافتراضية
+      toast.error('حدث خطأ في التحقق من الصلاحيات');
     }
   };
 
-  const loadStores = async () => {
+  const loadSettings = async () => {
     try {
       setLoading(true);
       
-      // استخدام بيانات افتراضية مؤقتاً
-      console.log('⚠️ [STORES PAGE] استخدام بيانات افتراضية');
-      const demoStores = [
-        {
-          id: '1',
-          name: 'متجر الإلكترونيات',
-          slug: 'electronics-store',
-          plan: 'pro',
-          active: true,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-1',
-          members_count: 3,
-          products_count: 25,
-        },
-        {
-          id: '2',
-          name: 'متجر الأزياء',
-          slug: 'fashion-store',
-          plan: 'basic',
-          active: true,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-2',
-          members_count: 1,
-          products_count: 15,
-        },
-        {
-          id: '3',
-          name: 'متجر الكتب',
-          slug: 'books-store',
-          plan: 'enterprise',
-          active: false,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-3',
-          members_count: 2,
-          products_count: 50,
-        }
-      ];
-      
-      setStores(demoStores);
+      // في التطبيق الحقيقي، ستكون هذه الإعدادات محفوظة في قاعدة البيانات
+      // هنا نستخدم القيم الافتراضية
+      setSettings({
+        platform_name: 'SaaSy',
+        support_email: 'support@saasy.com',
+        allow_registration: true,
+        require_email_verification: false,
+        max_stores_per_user: 1,
+        default_plan: 'basic',
+        maintenance_mode: false,
+        maintenance_message: 'المنصة قيد الصيانة، سنعود قريباً',
+      });
     } catch (error) {
-      console.error('خطأ في تحميل المتاجر:', error);
-      toast.error('حدث خطأ في تحميل المتاجر');
+      console.error('خطأ في تحميل الإعدادات:', error);
+      toast.error('حدث خطأ في تحميل الإعدادات');
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleStoreStatus = async (storeId: string, currentStatus: boolean) => {
+  const handleSave = async () => {
     try {
-      // محاكاة تغيير الحالة
-      setStores(prev => prev.map(store => 
-        store.id === storeId 
-          ? { ...store, active: !currentStatus }
-          : store
-      ));
-      toast.success(`تم ${!currentStatus ? 'تفعيل' : 'إلغاء تفعيل'} المتجر بنجاح`);
+      setSaving(true);
+      
+      // في التطبيق الحقيقي، ستحفظ الإعدادات في قاعدة البيانات
+      // هنا نحاكي عملية الحفظ
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      toast.success('تم حفظ الإعدادات بنجاح');
     } catch (error) {
-      console.error('خطأ في تغيير حالة المتجر:', error);
-      toast.error('حدث خطأ في تغيير حالة المتجر');
+      console.error('خطأ في حفظ الإعدادات:', error);
+      toast.error('حدث خطأ في حفظ الإعدادات');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const filteredStores = stores.filter(store =>
-    store.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    store.slug.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const getPlanBadgeColor = (plan: string) => {
-    switch (plan) {
-      case 'pro':
-        return 'bg-purple-100 text-purple-800';
-      case 'enterprise':
-        return 'bg-blue-100 text-blue-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getPlanName = (plan: string) => {
-    switch (plan) {
-      case 'pro':
-        return 'احترافية';
-      case 'enterprise':
-        return 'مؤسسية';
-      default:
-        return 'أساسية';
-    }
+  const handleInputChange = (field: keyof PlatformSettings, value: any) => {
+    setSettings(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   if (loading) {
@@ -143,7 +121,7 @@ export default function AdminStoresPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">جار تحميل المتاجر...</p>
+          <p className="text-gray-600">جار تحميل الإعدادات...</p>
         </div>
       </div>
     );
@@ -161,124 +139,187 @@ export default function AdminStoresPage() {
                 العودة
               </Button>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">إدارة المتاجر</h1>
+                <h1 className="text-3xl font-bold text-gray-900">إعدادات المنصة</h1>
                 <p className="text-gray-600 mt-1">
-                  عرض وإدارة جميع المتاجر في المنصة
+                  إدارة الإعدادات العامة للمنصة
                 </p>
               </div>
             </div>
+            <Button onClick={handleSave} disabled={saving}>
+              <Save className="h-4 w-4 ml-2" />
+              {saving ? 'جار الحفظ...' : 'حفظ الإعدادات'}
+            </Button>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Search and Stats */}
-        <div className="mb-8">
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between mb-6">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="البحث في المتاجر..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <div className="flex items-center space-x-4 space-x-reverse">
-              <Badge variant="secondary">
-                إجمالي المتاجر: {stores.length}
-              </Badge>
-              <Badge variant="secondary" className="bg-green-100 text-green-800">
-                نشط: {stores.filter(s => s.active).length}
-              </Badge>
-              <Badge variant="secondary" className="bg-red-100 text-red-800">
-                غير نشط: {stores.filter(s => !s.active).length}
-              </Badge>
-            </div>
-          </div>
-        </div>
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="space-y-8">
+          {/* General Settings */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <Settings className="h-5 w-5 text-blue-600" />
+                <CardTitle>الإعدادات العامة</CardTitle>
+              </div>
+              <CardDescription>
+                إعدادات أساسية للمنصة
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="platform_name">اسم المنصة</Label>
+                <Input
+                  id="platform_name"
+                  value={settings.platform_name}
+                  onChange={(e) => handleInputChange('platform_name', e.target.value)}
+                  placeholder="SaaSy"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="support_email">بريد الدعم الفني</Label>
+                <Input
+                  id="support_email"
+                  type="email"
+                  value={settings.support_email}
+                  onChange={(e) => handleInputChange('support_email', e.target.value)}
+                  placeholder="support@saasy.com"
+                />
+              </div>
 
-        {/* Stores Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredStores.map((store) => (
-            <Card key={store.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 space-x-reverse">
-                    <Store className="h-5 w-5 text-blue-600" />
-                    <CardTitle className="text-lg">{store.name}</CardTitle>
-                  </div>
-                  <Badge className={getPlanBadgeColor(store.plan)}>
-                    {getPlanName(store.plan)}
-                  </Badge>
+              <div>
+                <Label htmlFor="default_plan">الخطة الافتراضية</Label>
+                <select
+                  id="default_plan"
+                  value={settings.default_plan}
+                  onChange={(e) => handleInputChange('default_plan', e.target.value)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                >
+                  <option value="basic">أساسية</option>
+                  <option value="pro">احترافية</option>
+                  <option value="enterprise">مؤسسية</option>
+                </select>
+              </div>
+
+              <div>
+                <Label htmlFor="max_stores">الحد الأقصى للمتاجر لكل مستخدم</Label>
+                <Input
+                  id="max_stores"
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={settings.max_stores_per_user}
+                  onChange={(e) => handleInputChange('max_stores_per_user', parseInt(e.target.value) || 1)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Security Settings */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <Shield className="h-5 w-5 text-green-600" />
+                <CardTitle>إعدادات الأمان</CardTitle>
+              </div>
+              <CardDescription>
+                إعدادات التسجيل والمصادقة
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="allow_registration">السماح بالتسجيل الجديد</Label>
+                  <p className="text-sm text-gray-600">
+                    السماح للمستخدمين الجدد بإنشاء حسابات
+                  </p>
                 </div>
-                <CardDescription>
-                  {store.slug}.saasy.com
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <Users className="h-4 w-4 text-gray-500" />
-                      <span>الأعضاء</span>
-                    </div>
-                    <span className="font-medium">{store.members_count}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <DollarSign className="h-4 w-4 text-gray-500" />
-                      <span>المنتجات</span>
-                    </div>
-                    <span className="font-medium">{store.products_count}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <Calendar className="h-4 w-4 text-gray-500" />
-                      <span>تاريخ الإنشاء</span>
-                    </div>
-                    <span className="font-medium">
-                      {new Date(store.created_at).toLocaleDateString('ar-SA')}
-                    </span>
-                  </div>
+                <Switch
+                  id="allow_registration"
+                  checked={settings.allow_registration}
+                  onCheckedChange={(checked) => handleInputChange('allow_registration', checked)}
+                />
+              </div>
 
-                  <div className="flex items-center justify-between">
-                    <Badge 
-                      className={store.active 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                      }
-                    >
-                      {store.active ? 'نشط' : 'غير نشط'}
-                    </Badge>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => toggleStoreStatus(store.id, store.active)}
-                    >
-                      {store.active ? 'إلغاء التفعيل' : 'تفعيل'}
-                    </Button>
-                  </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="require_email_verification">تأكيد البريد الإلكتروني</Label>
+                  <p className="text-sm text-gray-600">
+                    طلب تأكيد البريد الإلكتروني عند التسجيل
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                <Switch
+                  id="require_email_verification"
+                  checked={settings.require_email_verification}
+                  onCheckedChange={(checked) => handleInputChange('require_email_verification', checked)}
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-        {filteredStores.length === 0 && (
-          <div className="text-center py-12">
-            <Store className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              لا توجد متاجر
-            </h3>
-            <p className="text-gray-600">
-              {searchTerm ? 'لم يتم العثور على متاجر تطابق البحث' : 'لم يتم إنشاء أي متاجر بعد'}
-            </p>
-          </div>
-        )}
+          {/* Maintenance Settings */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <Globe className="h-5 w-5 text-orange-600" />
+                <CardTitle>إعدادات الصيانة</CardTitle>
+              </div>
+              <CardDescription>
+                إدارة وضع الصيانة للمنصة
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="maintenance_mode">وضع الصيانة</Label>
+                  <p className="text-sm text-gray-600">
+                    تفعيل وضع الصيانة لجميع المستخدمين
+                  </p>
+                </div>
+                <Switch
+                  id="maintenance_mode"
+                  checked={settings.maintenance_mode}
+                  onCheckedChange={(checked) => handleInputChange('maintenance_mode', checked)}
+                />
+              </div>
+
+              {settings.maintenance_mode && (
+                <div>
+                  <Label htmlFor="maintenance_message">رسالة الصيانة</Label>
+                  <Input
+                    id="maintenance_message"
+                    value={settings.maintenance_message}
+                    onChange={(e) => handleInputChange('maintenance_message', e.target.value)}
+                    placeholder="المنصة قيد الصيانة، سنعود قريباً"
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Email Settings */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <Mail className="h-5 w-5 text-purple-600" />
+                <CardTitle>إعدادات البريد الإلكتروني</CardTitle>
+              </div>
+              <CardDescription>
+                إعدادات إرسال الإشعارات والرسائل
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p className="text-sm text-yellow-800">
+                  <strong>ملاحظة:</strong> إعدادات البريد الإلكتروني تتم من خلال Supabase Dashboard.
+                  يرجى الرجوع إلى وثائق Supabase لتكوين SMTP.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
