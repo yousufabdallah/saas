@@ -1,22 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Singleton instance
+// Global singleton instance
 let supabaseInstance: any = null;
 
 export const createBrowserClient = () => {
-  // إذا كان هناك instance موجود، أرجعه
-  if (supabaseInstance) {
+  // Return existing instance if available
+  if (typeof window !== 'undefined' && supabaseInstance) {
     return supabaseInstance;
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
-  // التحقق من وجود متغيرات البيئة
+  // Check if environment variables are set
   if (!supabaseUrl || !supabaseAnonKey) {
     console.warn('⚠️ Supabase غير مُعرّف. يرجى إعداد متغيرات البيئة في .env.local');
     
-    // إرجاع client وهمي للتطوير
+    // Return mock client for development
     const mockClient = {
       auth: {
         signInWithPassword: () => Promise.resolve({ 
@@ -49,26 +49,42 @@ export const createBrowserClient = () => {
         delete: () => ({
           eq: () => Promise.resolve({ data: null, error: new Error('يجب إعداد Supabase أولاً') })
         })
-      })
+      }),
+      rpc: () => Promise.resolve({ data: null, error: new Error('يجب إعداد Supabase أولاً') })
     } as any;
     
-    supabaseInstance = mockClient;
+    if (typeof window !== 'undefined') {
+      supabaseInstance = mockClient;
+    }
     return mockClient;
   }
   
-  // إنشاء instance جديد فقط إذا لم يكن موجود
-  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true
-    }
-  });
+  // Create new instance only if not exists
+  if (typeof window !== 'undefined' && !supabaseInstance) {
+    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    });
+  } else if (typeof window === 'undefined') {
+    // Server-side: always create new instance
+    return createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false
+      }
+    });
+  }
   
   return supabaseInstance;
 };
 
-// دالة لإعادة تعيين instance (للاختبار فقط)
+// Function to reset instance (for testing only)
 export const resetSupabaseInstance = () => {
-  supabaseInstance = null;
+  if (typeof window !== 'undefined') {
+    supabaseInstance = null;
+  }
 };
