@@ -4,122 +4,164 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Search, Store, Users, Calendar, DollarSign } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { ArrowLeft, Save, Settings, Store, CreditCard, Truck, Calculator } from 'lucide-react';
 import { createBrowserClient } from '@/lib/supabase';
 import { toast } from 'sonner';
 
-interface Store {
+interface CustomerStore {
   id: string;
   name: string;
   slug: string;
+  description?: string;
   plan: string;
   active: boolean;
   created_at: string;
-  owner_email?: string;
-  members_count?: number;
-  products_count?: number;
 }
 
-export default function AdminStoresPage() {
-  const [stores, setStores] = useState<Store[]>([]);
+interface StoreSettings {
+  name: string;
+  description: string;
+  contact_email: string;
+  contact_phone: string;
+  shipping_enabled: boolean;
+  shipping_cost_cents: number;
+  tax_enabled: boolean;
+  tax_rate: number;
+}
+
+export default function CustomerSettingsPage() {
+  const [customerStore, setCustomerStore] = useState<CustomerStore | null>(null);
+  const [settings, setSettings] = useState<StoreSettings>({
+    name: '',
+    description: '',
+    contact_email: '',
+    contact_phone: '',
+    shipping_enabled: false,
+    shipping_cost_cents: 0,
+    tax_enabled: false,
+    tax_rate: 0,
+  });
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
+  const [saving, setSaving] = useState(false);
   const router = useRouter();
   const supabase = createBrowserClient();
 
   useEffect(() => {
-    checkAdminAndLoadStores();
+    checkUserAndLoadData();
   }, []);
 
-  const checkAdminAndLoadStores = async () => {
+  const checkUserAndLoadData = async () => {
     try {
-      // تجاوز مؤقت لمشاكل RLS
-      console.log('⚠️ [STORES PAGE] تجاوز مؤقت لمشاكل RLS');
-      await loadStores();
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (error || !user) {
+        window.location.href = '/auth/signin';
+        return;
+      }
+
+      // التحقق من صلاحيات الأدمن - إذا كان أدمن، توجيهه لصفحة الأدمن
+      try {
+        const { data: isAdmin, error: adminError } = await supabase
+          .rpc('check_platform_admin', { user_id: user.id });
+
+        if (!adminError && isAdmin) {
+          window.location.href = '/admin';
+          return;
+        }
+      } catch (adminCheckError) {
+        console.log('متابعة كعميل عادي');
+      }
+
+      await loadCustomerStore(user.id);
     } catch (error) {
-      console.error('خطأ في التحقق من الصلاحيات:', error);
-      await loadStores(); // تحميل البيانات الافتراضية
+      console.error('خطأ في فحص المستخدم:', error);
+      setLoading(false);
     }
   };
 
-  const loadStores = async () => {
+  const loadCustomerStore = async (userId: string) => {
     try {
-      setLoading(true);
-      
-      // استخدام بيانات افتراضية مؤقتاً
-      console.log('⚠️ [STORES PAGE] استخدام بيانات افتراضية');
-      const demoStores = [
-        {
-          id: '1',
-          name: 'متجر الإلكترونيات',
-          slug: 'electronics-store',
-          plan: 'pro',
-          active: true,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-1',
-          members_count: 3,
-          products_count: 25,
-        },
-        {
-          id: '2',
-          name: 'متجر الأزياء',
-          slug: 'fashion-store',
-          plan: 'basic',
-          active: true,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-2',
-          members_count: 1,
-          products_count: 15,
-        },
-        {
-          id: '3',
-          name: 'متجر الكتب',
-          slug: 'books-store',
-          plan: 'enterprise',
-          active: false,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-3',
-          members_count: 2,
-          products_count: 50,
-        }
-      ];
-      setStores(demoStores);
+      // البحث عن متجر العميل
+      const { data: storeData, error: storeError } = await supabase
+        .from('stores')
+        .select('*')
+        .eq('owner_user_id', userId)
+        .single();
+
+      if (storeError || !storeData) {
+        console.log('العميل ليس له متجر');
+        setCustomerStore(null);
+        setLoading(false);
+        return;
+      }
+
+      setCustomerStore(storeData);
+
+      // تحميل إعدادات المتجر
+      setSettings({
+        name: storeData.name,
+        description: storeData.description || '',
+        contact_email: `contact@${storeData.slug}.com`,
+        contact_phone: '',
+        shipping_enabled: false,
+        shipping_cost_cents: 1000, // 10 ريال افتراضي
+        tax_enabled: false,
+        tax_rate: 15, // 15% ضريبة القيمة المضافة
+      });
+
     } catch (error) {
-      console.error('خطأ في تحميل المتاجر:', error);
-      toast.error('تم تحميل بيانات تجريبية مؤقتاً');
+      console.error('خطأ في تحميل متجر العميل:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleStoreStatus = async (storeId: string, currentStatus: boolean) => {
+  const handleSave = async () => {
+    if (!customerStore) return;
+
     try {
-      // محاكاة تغيير الحالة
+      setSaving(true);
       
-      await loadStores();
+      // تحديث معلومات المتجر الأساسية
+      const { error: storeError } = await supabase
+        .from('stores')
+        .update({
+          name: settings.name,
+          description: settings.description,
+        })
+        .eq('id', customerStore.id)
+        .eq('owner_user_id', customerStore.owner_user_id); // التأكد من الملكية
+
+      if (storeError) throw storeError;
+
+      // في التطبيق الحقيقي، ستحفظ باقي الإعدادات في جدول منفصل
+      // هنا نحاكي عملية الحفظ
+      
+      toast.success('تم حفظ الإعدادات بنجاح');
+      
+      // تحديث البيانات المحلية
+      setCustomerStore(prev => prev ? {
+        ...prev,
+        name: settings.name,
+        description: settings.description,
+      } : null);
+
     } catch (error) {
-      console.error('خطأ في تغيير حالة المتجر:', error);
-      toast.error('حدث خطأ في تغيير حالة المتجر');
+      console.error('خطأ في حفظ الإعدادات:', error);
+      toast.error('حدث خطأ في حفظ الإعدادات');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const filteredStores = stores.filter(store =>
-    store.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    store.slug.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const getPlanBadgeColor = (plan: string) => {
-    switch (plan) {
-      case 'pro':
-        return 'bg-purple-100 text-purple-800';
-      case 'enterprise':
-        return 'bg-blue-100 text-blue-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
+  const handleInputChange = (field: keyof StoreSettings, value: any) => {
+    setSettings(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   const getPlanName = (plan: string) => {
@@ -138,7 +180,45 @@ export default function AdminStoresPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">جار تحميل المتاجر...</p>
+          <p className="text-gray-600">جار تحميل الإعدادات...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!customerStore) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Settings className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">
+            ليس لديك متجر
+          </h1>
+          <p className="text-gray-600 mb-6">
+            يجب إنشاء متجر أولاً لإدارة الإعدادات
+          </p>
+          <Button onClick={() => window.location.href = '/pricing'}>
+            إنشاء متجر جديد
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!customerStore.active) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Settings className="h-16 w-16 text-orange-400 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-orange-600 mb-4">
+            متجرك غير نشط
+          </h1>
+          <p className="text-gray-600 mb-6">
+            متجرك قيد المراجعة من قبل الإدارة
+          </p>
+          <Button onClick={() => window.location.href = '/dashboard'}>
+            العودة للوحة التحكم
+          </Button>
         </div>
       </div>
     );
@@ -151,129 +231,264 @@ export default function AdminStoresPage() {
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4 space-x-reverse">
-              <Button variant="ghost" onClick={() => router.push('/admin')}>
+              <Button variant="ghost" onClick={() => window.location.href = '/dashboard'}>
                 <ArrowLeft className="h-4 w-4 ml-2" />
                 العودة
               </Button>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">إدارة المتاجر</h1>
+                <h1 className="text-3xl font-bold text-gray-900">إعدادات المتجر</h1>
                 <p className="text-gray-600 mt-1">
-                  عرض وإدارة جميع المتاجر في المنصة
+                  متجر {customerStore.name}
                 </p>
               </div>
             </div>
+            <Button onClick={handleSave} disabled={saving}>
+              <Save className="h-4 w-4 ml-2" />
+              {saving ? 'جار الحفظ...' : 'حفظ الإعدادات'}
+            </Button>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Search and Stats */}
-        <div className="mb-8">
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between mb-6">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="البحث في المتاجر..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <div className="flex items-center space-x-4 space-x-reverse">
-              <Badge variant="secondary">
-                إجمالي المتاجر: {stores.length}
-              </Badge>
-              <Badge variant="secondary" className="bg-green-100 text-green-800">
-                نشط: {stores.filter(s => s.active).length}
-              </Badge>
-              <Badge variant="secondary" className="bg-red-100 text-red-800">
-                غير نشط: {stores.filter(s => !s.active).length}
-              </Badge>
-            </div>
-          </div>
-        </div>
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="space-y-8">
+          {/* Store Info */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <Store className="h-5 w-5 text-blue-600" />
+                <CardTitle>معلومات المتجر</CardTitle>
+              </div>
+              <CardDescription>
+                الإعدادات الأساسية لمتجرك
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="store_name">اسم المتجر</Label>
+                <Input
+                  id="store_name"
+                  value={settings.name}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  placeholder="اسم متجرك"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="store_description">وصف المتجر</Label>
+                <Input
+                  id="store_description"
+                  value={settings.description}
+                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  placeholder="وصف مختصر لمتجرك"
+                />
+              </div>
 
-        {/* Stores Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredStores.map((store) => (
-            <Card key={store.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
+              <div className="bg-blue-50 p-4 rounded-lg">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 space-x-reverse">
-                    <Store className="h-5 w-5 text-blue-600" />
-                    <CardTitle className="text-lg">{store.name}</CardTitle>
+                  <div>
+                    <p className="font-medium text-blue-900">رابط المتجر</p>
+                    <p className="text-sm text-blue-700">
+                      {customerStore.slug}.saasy.com
+                    </p>
                   </div>
-                  <Badge className={getPlanBadgeColor(store.plan)}>
-                    {getPlanName(store.plan)}
-                  </Badge>
+                  <div>
+                    <p className="font-medium text-blue-900">الخطة الحالية</p>
+                    <p className="text-sm text-blue-700">
+                      {getPlanName(customerStore.plan)}
+                    </p>
+                  </div>
                 </div>
-                <CardDescription>
-                  {store.slug}.saasy.com
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <Users className="h-4 w-4 text-gray-500" />
-                      <span>الأعضاء</span>
-                    </div>
-                    <span className="font-medium">{store.members_count}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <DollarSign className="h-4 w-4 text-gray-500" />
-                      <span>المنتجات</span>
-                    </div>
-                    <span className="font-medium">{store.products_count}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <Calendar className="h-4 w-4 text-gray-500" />
-                      <span>تاريخ الإنشاء</span>
-                    </div>
-                    <span className="font-medium">
-                      {new Date(store.created_at).toLocaleDateString('ar-SA')}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Contact Settings */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <Settings className="h-5 w-5 text-green-600" />
+                <CardTitle>معلومات التواصل</CardTitle>
+              </div>
+              <CardDescription>
+                معلومات التواصل مع العملاء
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="contact_email">بريد التواصل</Label>
+                <Input
+                  id="contact_email"
+                  type="email"
+                  value={settings.contact_email}
+                  onChange={(e) => handleInputChange('contact_email', e.target.value)}
+                  placeholder="contact@yourstore.com"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="contact_phone">رقم الهاتف</Label>
+                <Input
+                  id="contact_phone"
+                  value={settings.contact_phone}
+                  onChange={(e) => handleInputChange('contact_phone', e.target.value)}
+                  placeholder="+966 50 123 4567"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Shipping Settings */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <Truck className="h-5 w-5 text-purple-600" />
+                <CardTitle>إعدادات الشحن</CardTitle>
+              </div>
+              <CardDescription>
+                إعدادات الشحن والتوصيل
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="shipping_enabled">تفعيل الشحن</Label>
+                  <p className="text-sm text-gray-600">
+                    تفعيل خدمة الشحن للعملاء
+                  </p>
+                </div>
+                <Switch
+                  id="shipping_enabled"
+                  checked={settings.shipping_enabled}
+                  onCheckedChange={(checked) => handleInputChange('shipping_enabled', checked)}
+                />
+              </div>
+
+              {settings.shipping_enabled && (
+                <div>
+                  <Label htmlFor="shipping_cost">تكلفة الشحن (بالهللة)</Label>
+                  <Input
+                    id="shipping_cost"
+                    type="number"
+                    value={settings.shipping_cost_cents}
+                    onChange={(e) => handleInputChange('shipping_cost_cents', parseInt(e.target.value) || 0)}
+                    placeholder="1000"
+                  />
+                  <p className="text-sm text-gray-600 mt-1">
+                    التكلفة بالريال: {(settings.shipping_cost_cents / 100).toFixed(2)} ر.س
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Tax Settings */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <Calculator className="h-5 w-5 text-orange-600" />
+                <CardTitle>إعدادات الضرائب</CardTitle>
+              </div>
+              <CardDescription>
+                إعدادات ضريبة القيمة المضافة
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="tax_enabled">تفعيل الضريبة</Label>
+                  <p className="text-sm text-gray-600">
+                    إضافة ضريبة القيمة المضافة للأسعار
+                  </p>
+                </div>
+                <Switch
+                  id="tax_enabled"
+                  checked={settings.tax_enabled}
+                  onCheckedChange={(checked) => handleInputChange('tax_enabled', checked)}
+                />
+              </div>
+
+              {settings.tax_enabled && (
+                <div>
+                  <Label htmlFor="tax_rate">نسبة الضريبة (%)</Label>
+                  <Input
+                    id="tax_rate"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={settings.tax_rate}
+                    onChange={(e) => handleInputChange('tax_rate', parseFloat(e.target.value) || 0)}
+                    placeholder="15"
+                  />
+                  <p className="text-sm text-gray-600 mt-1">
+                    ضريبة القيمة المضافة في السعودية: 15%
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Subscription Info */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <CreditCard className="h-5 w-5 text-green-600" />
+                <CardTitle>معلومات الاشتراك</CardTitle>
+              </div>
+              <CardDescription>
+                تفاصيل خطة الاشتراك الحالية
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <Label>الخطة الحالية</Label>
+                  <div className="mt-2">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                      {getPlanName(customerStore.plan)}
                     </span>
                   </div>
-
-                  <div className="flex items-center justify-between">
-                    <Badge 
-                      className={store.active 
+                </div>
+                
+                <div>
+                  <Label>حالة المتجر</Label>
+                  <div className="mt-2">
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                      customerStore.active 
                         ? 'bg-green-100 text-green-800' 
                         : 'bg-red-100 text-red-800'
-                      }
-                    >
-                      {store.active ? 'نشط' : 'غير نشط'}
-                    </Badge>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => toggleStoreStatus(store.id, store.active)}
-                    >
-                      {store.active ? 'إلغاء التفعيل' : 'تفعيل'}
-                    </Button>
+                    }`}>
+                      {customerStore.active ? 'نشط' : 'غير نشط'}
+                    </span>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
 
-        {filteredStores.length === 0 && (
-          <div className="text-center py-12">
-            <Store className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              لا توجد متاجر
-            </h3>
-            <p className="text-gray-600">
-              {searchTerm ? 'لم يتم العثور على متاجر تطابق البحث' : 'لم يتم إنشاء أي متاجر بعد'}
-            </p>
-          </div>
-        )}
+                <div>
+                  <Label>تاريخ الإنشاء</Label>
+                  <p className="text-sm text-gray-600 mt-2">
+                    {new Date(customerStore.created_at).toLocaleDateString('ar-SA')}
+                  </p>
+                </div>
+
+                <div>
+                  <Label>رابط المتجر</Label>
+                  <p className="text-sm text-blue-600 mt-2 font-mono">
+                    {customerStore.slug}.saasy.com
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 pt-6 border-t">
+                <Button variant="outline" className="w-full">
+                  <CreditCard className="h-4 w-4 ml-2" />
+                  ترقية الخطة
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

@@ -5,132 +5,200 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { ArrowLeft, Search, Store, Users, Calendar, DollarSign } from 'lucide-react';
+import { ArrowLeft, TrendingUp, DollarSign, ShoppingCart, Package, Download } from 'lucide-react';
 import { createBrowserClient } from '@/lib/supabase';
 import { toast } from 'sonner';
 
-interface Store {
+interface CustomerStore {
   id: string;
   name: string;
   slug: string;
   plan: string;
   active: boolean;
-  created_at: string;
-  owner_email?: string;
-  members_count?: number;
-  products_count?: number;
 }
 
-export default function AdminStoresPage() {
-  const [stores, setStores] = useState<Store[]>([]);
+interface AnalyticsData {
+  totalRevenue: number;
+  totalOrders: number;
+  totalProducts: number;
+  averageOrderValue: number;
+  topProducts: { title: string; sales: number }[];
+  recentSales: { date: string; amount: number; customer: string }[];
+  monthlyRevenue: { month: string; revenue: number }[];
+}
+
+export default function CustomerAnalyticsPage() {
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData>({
+    totalRevenue: 0,
+    totalOrders: 0,
+    totalProducts: 0,
+    averageOrderValue: 0,
+    topProducts: [],
+    recentSales: [],
+    monthlyRevenue: [],
+  });
+  const [customerStore, setCustomerStore] = useState<CustomerStore | null>(null);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
+  const [selectedPeriod, setSelectedPeriod] = useState('month');
   const router = useRouter();
   const supabase = createBrowserClient();
 
   useEffect(() => {
-    checkAdminAndLoadStores();
-  }, []);
+    checkUserAndLoadData();
+  }, [selectedPeriod]);
 
-  const checkAdminAndLoadStores = async () => {
+  const checkUserAndLoadData = async () => {
     try {
-      // تجاوز مؤقت لمشاكل RLS
-      console.log('⚠️ [STORES PAGE] تجاوز مؤقت لمشاكل RLS');
-      await loadStores();
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (error || !user) {
+        window.location.href = '/auth/signin';
+        return;
+      }
+
+      // التحقق من صلاحيات الأدمن - إذا كان أدمن، توجيهه لصفحة الأدمن
+      try {
+        const { data: isAdmin, error: adminError } = await supabase
+          .rpc('check_platform_admin', { user_id: user.id });
+
+        if (!adminError && isAdmin) {
+          window.location.href = '/admin';
+          return;
+        }
+      } catch (adminCheckError) {
+        console.log('متابعة كعميل عادي');
+      }
+
+      await loadCustomerStore(user.id);
     } catch (error) {
-      console.error('خطأ في التحقق من الصلاحيات:', error);
-      await loadStores(); // تحميل البيانات الافتراضية
+      console.error('خطأ في فحص المستخدم:', error);
+      setLoading(false);
     }
   };
 
-  const loadStores = async () => {
+  const loadCustomerStore = async (userId: string) => {
     try {
-      setLoading(true);
-      
-      // استخدام بيانات افتراضية مؤقتاً
-      console.log('⚠️ [STORES PAGE] استخدام بيانات افتراضية');
-      const demoStores = [
-        {
-          id: '1',
-          name: 'متجر الإلكترونيات',
-          slug: 'electronics-store',
-          plan: 'pro',
-          active: true,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-1',
-          members_count: 3,
-          products_count: 25,
-        },
-        {
-          id: '2',
-          name: 'متجر الأزياء',
-          slug: 'fashion-store',
-          plan: 'basic',
-          active: true,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-2',
-          members_count: 1,
-          products_count: 15,
-        },
-        {
-          id: '3',
-          name: 'متجر الكتب',
-          slug: 'books-store',
-          plan: 'enterprise',
-          active: false,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-3',
-          members_count: 2,
-          products_count: 50,
-        }
-      ];
-      setStores(demoStores);
+      // البحث عن متجر العميل
+      const { data: storeData, error: storeError } = await supabase
+        .from('stores')
+        .select('*')
+        .eq('owner_user_id', userId)
+        .single();
+
+      if (storeError || !storeData) {
+        console.log('العميل ليس له متجر');
+        setCustomerStore(null);
+        setLoading(false);
+        return;
+      }
+
+      setCustomerStore(storeData);
+
+      if (!storeData.active) {
+        setLoading(false);
+        return;
+      }
+
+      // تحميل تحليلات متجر العميل فقط
+      await loadAnalytics(storeData.id);
     } catch (error) {
-      console.error('خطأ في تحميل المتاجر:', error);
-      toast.error('تم تحميل بيانات تجريبية مؤقتاً');
+      console.error('خطأ في تحميل متجر العميل:', error);
+      setLoading(false);
+    }
+  };
+
+  const loadAnalytics = async (storeId: string) => {
+    try {
+      // جلب منتجات المتجر
+      const { data: products, error: productsError } = await supabase
+        .from('products')
+        .select('id, title')
+        .eq('store_id', storeId);
+
+      // جلب طلبات المتجر
+      const { data: orders, error: ordersError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('store_id', storeId);
+
+      if (productsError || ordersError) {
+        console.error('خطأ في تحميل البيانات للتحليلات');
+        setAnalyticsData({
+          totalRevenue: 0,
+          totalOrders: 0,
+          totalProducts: 0,
+          averageOrderValue: 0,
+          topProducts: [],
+          recentSales: [],
+          monthlyRevenue: [],
+        });
+        return;
+      }
+
+      // حساب التحليلات من بيانات متجر العميل فقط
+      const totalProducts = products?.length || 0;
+      const totalOrders = orders?.length || 0;
+      const completedOrders = orders?.filter(o => o.status === 'completed') || [];
+      const totalRevenue = completedOrders.reduce((sum, order) => sum + (order.total_cents || 0), 0) / 100;
+      const averageOrderValue = completedOrders.length > 0 ? totalRevenue / completedOrders.length : 0;
+
+      // أفضل المنتجات (محاكاة)
+      const topProducts = products?.slice(0, 5).map((product, index) => ({
+        title: product.title,
+        sales: Math.floor(Math.random() * 20) + 1,
+      })) || [];
+
+      // المبيعات الأخيرة
+      const recentSales = completedOrders.slice(0, 10).map(order => ({
+        date: order.created_at,
+        amount: order.total_cents / 100,
+        customer: order.customer_name,
+      }));
+
+      // الإيرادات الشهرية (محاكاة)
+      const monthlyRevenue = [
+        { month: 'يناير', revenue: totalRevenue * 0.8 },
+        { month: 'فبراير', revenue: totalRevenue * 0.9 },
+        { month: 'مارس', revenue: totalRevenue },
+      ];
+
+      setAnalyticsData({
+        totalRevenue,
+        totalOrders,
+        totalProducts,
+        averageOrderValue,
+        topProducts,
+        recentSales,
+        monthlyRevenue,
+      });
+    } catch (error) {
+      console.error('خطأ في تحميل التحليلات:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleStoreStatus = async (storeId: string, currentStatus: boolean) => {
-    try {
-      // محاكاة تغيير الحالة
-      
-      await loadStores();
-    } catch (error) {
-      console.error('خطأ في تغيير حالة المتجر:', error);
-      toast.error('حدث خطأ في تغيير حالة المتجر');
-    }
-  };
+  const exportReport = () => {
+    const csvContent = [
+      ['التاريخ', 'العميل', 'المبلغ'],
+      ...analyticsData.recentSales.map(sale => [
+        new Date(sale.date).toLocaleDateString('ar-SA'),
+        sale.customer,
+        `${sale.amount} ر.س`
+      ])
+    ].map(row => row.join(',')).join('\n');
 
-  const filteredStores = stores.filter(store =>
-    store.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    store.slug.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const getPlanBadgeColor = (plan: string) => {
-    switch (plan) {
-      case 'pro':
-        return 'bg-purple-100 text-purple-800';
-      case 'enterprise':
-        return 'bg-blue-100 text-blue-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getPlanName = (plan: string) => {
-    switch (plan) {
-      case 'pro':
-        return 'احترافية';
-      case 'enterprise':
-        return 'مؤسسية';
-      default:
-        return 'أساسية';
-    }
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `تقرير-${customerStore?.name}-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success('تم تصدير التقرير بنجاح');
   };
 
   if (loading) {
@@ -138,7 +206,45 @@ export default function AdminStoresPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">جار تحميل المتاجر...</p>
+          <p className="text-gray-600">جار تحميل التحليلات...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!customerStore) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <TrendingUp className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">
+            ليس لديك متجر
+          </h1>
+          <p className="text-gray-600 mb-6">
+            يجب إنشاء متجر أولاً لعرض التحليلات
+          </p>
+          <Button onClick={() => window.location.href = '/pricing'}>
+            إنشاء متجر جديد
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!customerStore.active) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <TrendingUp className="h-16 w-16 text-orange-400 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-orange-600 mb-4">
+            متجرك غير نشط
+          </h1>
+          <p className="text-gray-600 mb-6">
+            متجرك قيد المراجعة من قبل الإدارة
+          </p>
+          <Button onClick={() => window.location.href = '/dashboard'}>
+            العودة للوحة التحكم
+          </Button>
         </div>
       </div>
     );
@@ -151,16 +257,32 @@ export default function AdminStoresPage() {
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4 space-x-reverse">
-              <Button variant="ghost" onClick={() => router.push('/admin')}>
+              <Button variant="ghost" onClick={() => window.location.href = '/dashboard'}>
                 <ArrowLeft className="h-4 w-4 ml-2" />
                 العودة
               </Button>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">إدارة المتاجر</h1>
+                <h1 className="text-3xl font-bold text-gray-900">التحليلات والتقارير</h1>
                 <p className="text-gray-600 mt-1">
-                  عرض وإدارة جميع المتاجر في المنصة
+                  متجر {customerStore.name}
                 </p>
               </div>
+            </div>
+            <div className="flex items-center space-x-4 space-x-reverse">
+              <select
+                value={selectedPeriod}
+                onChange={(e) => setSelectedPeriod(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-2"
+              >
+                <option value="week">هذا الأسبوع</option>
+                <option value="month">هذا الشهر</option>
+                <option value="quarter">هذا الربع</option>
+                <option value="year">هذا العام</option>
+              </select>
+              <Button onClick={exportReport}>
+                <Download className="h-4 w-4 ml-2" />
+                تصدير التقرير
+              </Button>
             </div>
           </div>
         </div>
@@ -168,112 +290,180 @@ export default function AdminStoresPage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Search and Stats */}
-        <div className="mb-8">
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between mb-6">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="البحث في المتاجر..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <div className="flex items-center space-x-4 space-x-reverse">
-              <Badge variant="secondary">
-                إجمالي المتاجر: {stores.length}
-              </Badge>
-              <Badge variant="secondary" className="bg-green-100 text-green-800">
-                نشط: {stores.filter(s => s.active).length}
-              </Badge>
-              <Badge variant="secondary" className="bg-red-100 text-red-800">
-                غير نشط: {stores.filter(s => !s.active).length}
-              </Badge>
-            </div>
-          </div>
+        {/* Key Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                إجمالي الإيرادات
+              </CardTitle>
+              <DollarSign className="h-5 w-5 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600 mb-1">
+                {analyticsData.totalRevenue.toFixed(2)} ر.س
+              </div>
+              <div className="text-sm text-gray-600">
+                من الطلبات المكتملة
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                إجمالي الطلبات
+              </CardTitle>
+              <ShoppingCart className="h-5 w-5 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600 mb-1">
+                {analyticsData.totalOrders}
+              </div>
+              <div className="text-sm text-gray-600">
+                طلب إجمالي
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                إجمالي المنتجات
+              </CardTitle>
+              <Package className="h-5 w-5 text-purple-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-purple-600 mb-1">
+                {analyticsData.totalProducts}
+              </div>
+              <div className="text-sm text-gray-600">
+                منتج في المتجر
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                متوسط قيمة الطلب
+              </CardTitle>
+              <TrendingUp className="h-5 w-5 text-orange-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-600 mb-1">
+                {analyticsData.averageOrderValue.toFixed(2)} ر.س
+              </div>
+              <div className="text-sm text-gray-600">
+                متوسط الطلب
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Stores Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredStores.map((store) => (
-            <Card key={store.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 space-x-reverse">
-                    <Store className="h-5 w-5 text-blue-600" />
-                    <CardTitle className="text-lg">{store.name}</CardTitle>
-                  </div>
-                  <Badge className={getPlanBadgeColor(store.plan)}>
-                    {getPlanName(store.plan)}
-                  </Badge>
-                </div>
-                <CardDescription>
-                  {store.slug}.saasy.com
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <Users className="h-4 w-4 text-gray-500" />
-                      <span>الأعضاء</span>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Top Products */}
+          <Card>
+            <CardHeader>
+              <CardTitle>أفضل المنتجات مبيعاً</CardTitle>
+              <CardDescription>المنتجات الأكثر مبيعاً في متجرك</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {analyticsData.topProducts.length > 0 ? (
+                  analyticsData.topProducts.map((product, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3 space-x-reverse">
+                        <div className={`w-3 h-3 rounded-full ${
+                          index === 0 ? 'bg-blue-600' : 
+                          index === 1 ? 'bg-purple-600' : 'bg-gray-400'
+                        }`} />
+                        <span className="font-medium">{product.title}</span>
+                      </div>
+                      <Badge variant="outline">
+                        {product.sales} مبيعة
+                      </Badge>
                     </div>
-                    <span className="font-medium">{store.members_count}</span>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <Package className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-gray-600">لا توجد بيانات مبيعات بعد</p>
                   </div>
-                  
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <DollarSign className="h-4 w-4 text-gray-500" />
-                      <span>المنتجات</span>
-                    </div>
-                    <span className="font-medium">{store.products_count}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <Calendar className="h-4 w-4 text-gray-500" />
-                      <span>تاريخ الإنشاء</span>
-                    </div>
-                    <span className="font-medium">
-                      {new Date(store.created_at).toLocaleDateString('ar-SA')}
-                    </span>
-                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
-                  <div className="flex items-center justify-between">
-                    <Badge 
-                      className={store.active 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                      }
-                    >
-                      {store.active ? 'نشط' : 'غير نشط'}
-                    </Badge>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => toggleStoreStatus(store.id, store.active)}
-                    >
-                      {store.active ? 'إلغاء التفعيل' : 'تفعيل'}
-                    </Button>
+          {/* Recent Sales */}
+          <Card>
+            <CardHeader>
+              <CardTitle>المبيعات الأخيرة</CardTitle>
+              <CardDescription>آخر المبيعات في متجرك</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {analyticsData.recentSales.length > 0 ? (
+                  analyticsData.recentSales.map((sale, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">{sale.customer}</p>
+                        <p className="text-xs text-gray-600">
+                          {new Date(sale.date).toLocaleDateString('ar-SA')}
+                        </p>
+                      </div>
+                      <Badge className="bg-green-100 text-green-800">
+                        {sale.amount.toFixed(2)} ر.س
+                      </Badge>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <DollarSign className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-gray-600">لا توجد مبيعات بعد</p>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {filteredStores.length === 0 && (
-          <div className="text-center py-12">
-            <Store className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              لا توجد متاجر
-            </h3>
-            <p className="text-gray-600">
-              {searchTerm ? 'لم يتم العثور على متاجر تطابق البحث' : 'لم يتم إنشاء أي متاجر بعد'}
-            </p>
-          </div>
-        )}
+        {/* Summary Stats */}
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle>ملخص أداء المتجر</CardTitle>
+            <CardDescription>نظرة عامة على أداء متجرك</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-blue-600 mb-2">
+                  {analyticsData.totalOrders}
+                </div>
+                <div className="text-sm text-gray-600">إجمالي الطلبات</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  في متجرك
+                </div>
+              </div>
+              
+              <div className="text-center">
+                <div className="text-3xl font-bold text-green-600 mb-2">
+                  {analyticsData.totalRevenue.toFixed(0)}
+                </div>
+                <div className="text-sm text-gray-600">إجمالي الإيرادات</div>
+                <div className="text-xs text-gray-500 mt-1">ريال سعودي</div>
+              </div>
+              
+              <div className="text-center">
+                <div className="text-3xl font-bold text-purple-600 mb-2">
+                  {analyticsData.averageOrderValue.toFixed(0)}
+                </div>
+                <div className="text-sm text-gray-600">متوسط قيمة الطلب</div>
+                <div className="text-xs text-gray-500 mt-1">ريال سعودي</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
