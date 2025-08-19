@@ -20,6 +20,8 @@ export default function SignInPage() {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    
+    console.log('🔐 بدء عملية تسجيل الدخول...');
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -30,13 +32,15 @@ export default function SignInPage() {
       if (error) {
         throw error;
       }
+      
+      console.log('✅ تم تسجيل الدخول بنجاح:', data.user?.email);
 
       toast.success('تم تسجيل الدخول بنجاح!');
       
       // التحقق من صلاحيات الأدمن
       if (data.user?.id) {
-        console.log('Checking admin status for user:', data.user.id);
-        console.log('User email:', data.user.email);
+        console.log('🔍 فحص صلاحيات الأدمن للمستخدم:', data.user.id);
+        console.log('📧 البريد الإلكتروني:', data.user.email);
         
         const { data: adminData, error: adminError } = await supabase
           .from('platform_admins')
@@ -44,19 +48,20 @@ export default function SignInPage() {
           .eq('user_id', data.user.id)
           .single();
         
-        console.log('Admin check result:', { 
+        console.log('📊 نتيجة فحص الأدمن:', { 
           adminData, 
-          adminError: adminError?.message, 
+          adminError: adminError?.message,
+          adminErrorCode: adminError?.code,
           userId: data.user.id,
           userEmail: data.user.email 
         });
         
-        if (adminData && !adminError) {
-          console.log('✅ User is platform admin - redirecting to admin panel');
+        if (adminData && adminError?.code !== 'PGRST116') {
+          console.log('✅ المستخدم أدمن منصة - توجيه إلى لوحة الأدمن');
           router.push('/admin');
         } else {
-          console.log('❌ User is not platform admin - redirecting to dashboard');
-          console.log('Error details:', adminError);
+          console.log('❌ المستخدم ليس أدمن منصة - توجيه إلى لوحة التحكم العادية');
+          console.log('تفاصيل الخطأ:', adminError);
           router.push('/dashboard');
         }
       }

@@ -1,6 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Singleton instance
+let supabaseInstance: any = null;
+
 export const createBrowserClient = () => {
+  // إذا كان هناك instance موجود، أرجعه
+  if (supabaseInstance) {
+    return supabaseInstance;
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
@@ -9,7 +17,7 @@ export const createBrowserClient = () => {
     console.warn('⚠️ Supabase غير مُعرّف. يرجى إعداد متغيرات البيئة في .env.local');
     
     // إرجاع client وهمي للتطوير
-    return {
+    const mockClient = {
       auth: {
         signInWithPassword: () => Promise.resolve({ 
           data: null, 
@@ -43,7 +51,24 @@ export const createBrowserClient = () => {
         })
       })
     } as any;
+    
+    supabaseInstance = mockClient;
+    return mockClient;
   }
   
-  return createClient(supabaseUrl, supabaseAnonKey);
+  // إنشاء instance جديد فقط إذا لم يكن موجود
+  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true
+    }
+  });
+  
+  return supabaseInstance;
+};
+
+// دالة لإعادة تعيين instance (للاختبار فقط)
+export const resetSupabaseInstance = () => {
+  supabaseInstance = null;
 };
