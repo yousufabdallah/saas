@@ -1,9 +1,9 @@
-import { createServerClient } from './supabase/server';
+import { createServerSupabaseClient } from './supabase/server';
 import { createBrowserClient } from './supabase';
 import { redirect } from 'next/navigation';
 
 export async function getUser() {
-  const supabase = createServerClient();
+  const supabase = createServerSupabaseClient();
   
   try {
     const { data: { user }, error } = await supabase.auth.getUser();
@@ -30,7 +30,7 @@ export async function requireAuth() {
 }
 
 export async function isPlatformAdmin(userId: string) {
-  const supabase = createServerClient();
+  const supabase = createServerSupabaseClient();
   
   const { data, error } = await supabase
     .from('platform_admins')
@@ -42,7 +42,7 @@ export async function isPlatformAdmin(userId: string) {
 }
 
 export async function getUserStores(userId: string) {
-  const supabase = createServerClient();
+  const supabase = createServerSupabaseClient();
   
   const { data, error } = await supabase
     .from('store_members')
