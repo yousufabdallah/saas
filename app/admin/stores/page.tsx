@@ -85,6 +85,19 @@ export default function AdminStoresPage() {
           members_count: 2,
           products_count: 50,
         }
+      ];
+      
+      setStores(demoStores);
+    } catch (error) {
+      console.error('خطأ في تحميل المتاجر:', error);
+      toast.error('حدث خطأ في تحميل المتاجر');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleStoreStatus = async (storeId: string, currentStatus: boolean) => {
+    try {
       // محاكاة تغيير الحالة
       setStores(prev => prev.map(store => 
         store.id === storeId 

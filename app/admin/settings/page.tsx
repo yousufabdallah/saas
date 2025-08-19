@@ -90,7 +90,7 @@ export default function AdminStoresPage() {
       setStores(demoStores);
     } catch (error) {
       console.error('خطأ في تحميل المتاجر:', error);
-      toast.error('تم تحميل بيانات تجريبية مؤقتاً');
+      toast.error('حدث خطأ في تحميل المتاجر');
     } finally {
       setLoading(false);
     }
