@@ -44,25 +44,19 @@ export default function AdminStoresPage() {
       }
 
       // التحقق من صلاحيات الأدمن
-      try {
-        const { data: isAdmin } = await supabase
-          .rpc('check_platform_admin', { user_id: user.id });
+      const { data: isAdmin } = await supabase
+        .rpc('check_platform_admin', { user_id: user.id });
 
-        if (!isAdmin) {
-          toast.error('ليس لديك صلاحيات للوصول إلى هذه الصفحة');
-          router.push('/dashboard');
-          return;
-        }
-      } catch (adminError) {
-        console.log('⚠️ [DASHBOARD] تجاهل خطأ فحص الأدمن:', adminError);
-        // المتابعة كعميل عادي
+      if (!isAdmin) {
+        toast.error('ليس لديك صلاحيات للوصول إلى هذه الصفحة');
+        router.push('/dashboard');
+        return;
       }
 
       await loadStores();
     } catch (error) {
       console.error('خطأ في التحقق من الصلاحيات:', error);
-      // في حالة الخطأ، توجيه لتسجيل الدخول
-      router.push('/auth/signin');
+      toast.error('حدث خطأ في التحقق من الصلاحيات');
     }
   };
 
@@ -92,7 +86,20 @@ export default function AdminStoresPage() {
       setStores(formattedStores);
     } catch (error) {
       console.error('خطأ في تحميل المتاجر:', error);
-      setStores([]);
+      // استخدام بيانات افتراضية في حالة الخطأ
+      setStores([
+        {
+          id: '1',
+          name: 'متجر تجريبي',
+          slug: 'demo-store',
+          plan: 'pro',
+          active: true,
+          created_at: new Date().toISOString(),
+          owner_user_id: 'demo-user',
+          members_count: 1,
+          products_count: 5,
+        }
+      ]);
       toast.error('تم تحميل بيانات تجريبية - تحقق من إعدادات قاعدة البيانات');
     } finally {
       setLoading(false);
