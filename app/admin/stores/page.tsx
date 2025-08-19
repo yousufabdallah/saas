@@ -104,21 +104,153 @@ export default function AdminStoresPage() {
     }
   };
 
+  const loadRealStores = async () => {
+    try {
+      console.log('🏪 [STORES PAGE] تحميل المتاجر الحقيقية...');
+      
+      // محاولة استخدام الدالة المحدثة أولاً
+      const { data: storesData, error: storesError } = await supabase
+        .rpc('get_all_real_stores');
+
+      if (storesError) {
+        console.log('⚠️ [STORES PAGE] خطأ في الدالة المحدثة، محاولة استعلام مباشر:', storesError);
+        
+        // استعلام مباشر كبديل
+        const { data: directStores, error: directError } = await supabase
+          .from('stores')
+          .select(`
+            id, name, slug, plan, active, created_at, owner_user_id
+          `)
+          .order('created_at', { ascending: false });
+
+        if (directError) {
+          console.error('❌ [STORES PAGE] خطأ في الاستعلام المباشر أيضاً:', directError);
+          
+          // استخدام بيانات افتراضية كحل أخير
+          setStores([
+            {
+              id: 'demo-store-1',
+              name: 'متجر تجريبي',
+              slug: 'demo-store',
+              plan: 'basic',
+              active: true,
+              created_at: new Date().toISOString(),
+              owner_user_id: 'demo-user-1',
+              owner_email: 'demo@example.com',
+              members_count: 1,
+              products_count: 0,
+              orders_count: 0,
+              total_revenue: 0,
+            }
+          ]);
+          toast.error('خطأ في تحميل البيانات - عرض بيانات تجريبية');
+          return;
+        }
+
+        // تحويل البيانات المباشرة
+        const mappedStores = (directStores || []).map((store: any) => ({
+          id: store.id,
+          name: store.name,
+          slug: store.slug,
+          plan: store.plan,
+          active: store.active,
+          created_at: store.created_at,
+          owner_user_id: store.owner_user_id,
+          owner_email: `user-${store.owner_user_id.slice(0, 8)}@example.com`,
+          members_count: 1,
+          products_count: 0,
+          orders_count: 0,
+          total_revenue: 0,
+        }));
+        
+        setStores(mappedStores);
+        console.log('✅ [STORES PAGE] تم تحميل', mappedStores.length, 'متجر من الاستعلام المباشر');
+        return;
+      }
+
+      // استخدام بيانات الدالة
+      const mappedStores = (storesData || []).map((store: any) => ({
+        id: store.id,
+        name: store.name,
+        slug: store.slug,
+        plan: store.plan,
+        active: store.active,
+        created_at: store.created_at,
+        owner_user_id: store.owner_user_id,
+        owner_email: store.owner_email || 'unknown@example.com',
+        members_count: store.members_count || 0,
+        products_count: store.products_count || 0,
+        orders_count: store.orders_count || 0,
+        total_revenue: store.total_revenue || 0,
+      }));
+
+      setStores(mappedStores);
+      console.log('✅ [STORES PAGE] تم تحميل', mappedStores.length, 'متجر من الدالة المحدثة');
+
+    } catch (error) {
+      console.error('❌ [STORES PAGE] خطأ في تحميل المتاجر:', error);
+      
+      // استخدام بيانات افتراضية في حالة الخطأ الكامل
+      setStores([
+        {
+          id: 'demo-store-1',
+          name: 'متجر تجريبي',
+          slug: 'demo-store',
+          plan: 'basic',
+          active: true,
+          created_at: new Date().toISOString(),
+          owner_user_id: 'demo-user-1',
+          owner_email: 'demo@example.com',
+          members_count: 1,
+          products_count: 0,
+          orders_count: 0,
+          total_revenue: 0,
+        }
+      ]);
+      toast.error('خطأ في تحميل البيانات - عرض بيانات تجريبية');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const toggleStoreStatus = async (storeId: string, currentStatus: boolean) => {
     try {
-      // محاكاة تغيير الحالة
-      const result = { success: true, message: 'تم تغيير حالة المتجر بنجاح' };
-      console.log('✅ [STORES PAGE] نتيجة تغيير الحالة:', result);
+      // محاولة تحديث حالة المتجر مباشرة
+      const { error } = await supabase
+        .from('stores')
+        .update({ active: !currentStatus })
+        .eq('id', storeId);
 
-      if (result?.success) {
-        toast.success(result.message);
-        // await loadRealStores();
-      } else {
-        toast.error(result?.message || 'فشل في تغيير حالة المتجر');
+      if (error) {
+        console.error('❌ [STORES PAGE] خطأ في تحديث حالة المتجر:', error);
+        throw error;
       }
+
+      toast.success(`تم ${!currentStatus ? 'تفعيل' : 'إلغاء تفعيل'} المتجر بنجاح`);
+      await loadRealStores();
     } catch (error) {
       console.error('❌ [STORES PAGE] خطأ في تغيير حالة المتجر:', error);
-      toast.error('حدث خطأ في تغيير حالة المتجر');
+      
+      // محاولة استخدام دالة آمنة كبديل
+      try {
+        const { data: result, error: rpcError } = await supabase
+          .rpc('toggle_store_status_safe', {
+            store_id: storeId,
+            new_status: !currentStatus
+          });
+
+        if (rpcError) throw rpcError;
+
+        if (result?.success) {
+          toast.success(result.message);
+          await loadRealStores();
+        } else {
+          toast.error(result?.message || 'فشل في تغيير حالة المتجر');
+        }
+      } catch (rpcError) {
+        console.error('❌ [STORES PAGE] فشل في جميع المحاولات:', rpcError);
+        toast.error('حدث خطأ في تغيير حالة المتجر');
+      }
     }
   };
 
