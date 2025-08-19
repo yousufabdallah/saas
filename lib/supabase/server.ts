@@ -4,9 +4,38 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const createServerSupabaseClient = () => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !supabaseServiceKey) {
+    // Return a mock client for build-time when env vars are missing
+    return {
+      auth: {
+        getUser: () => Promise.resolve({ data: { user: null }, error: new Error('Supabase not configured') }),
+        exchangeCodeForSession: () => Promise.resolve({ error: new Error('Supabase not configured') }),
+      },
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            single: () => Promise.resolve({ data: null, error: new Error('Supabase not configured') })
+          }),
+          single: () => Promise.resolve({ data: null, error: new Error('Supabase not configured') })
+        }),
+        insert: () => ({
+          select: () => ({
+            single: () => Promise.resolve({ data: null, error: new Error('Supabase not configured') })
+          })
+        }),
+        update: () => ({
+          eq: () => Promise.resolve({ data: null, error: new Error('Supabase not configured') })
+        })
+      })
+    } as any;
+  }
+  
   return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    supabaseUrl,
+    supabaseServiceKey,
     {
       auth: {
         persistSession: false,
@@ -16,11 +45,35 @@ export const createServerSupabaseClient = () => {
 };
 
 export const createRouteHandlerClient = () => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  if (!supabaseUrl || !supabaseAnonKey) {
+    // Return a mock client for build-time when env vars are missing
+    return {
+      auth: {
+        getUser: () => Promise.resolve({ data: { user: null }, error: new Error('Supabase not configured') }),
+        exchangeCodeForSession: () => Promise.resolve({ error: new Error('Supabase not configured') }),
+      },
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            single: () => Promise.resolve({ data: null, error: new Error('Supabase not configured') })
+          })
+        }),
+        insert: () => Promise.resolve({ data: null, error: new Error('Supabase not configured') }),
+        update: () => ({
+          eq: () => Promise.resolve({ data: null, error: new Error('Supabase not configured') })
+        })
+      })
+    } as any;
+  }
+  
   const cookieStore = cookies();
   
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         get(name: string): string | undefined {
@@ -46,6 +99,26 @@ export const createRouteHandlerClient = () => {
 };
 
 export const createMiddlewareClient = (request: NextRequest) => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  if (!supabaseUrl || !supabaseAnonKey) {
+    // Return a mock response for build-time when env vars are missing
+    const response = NextResponse.next({
+      request: {
+        headers: request.headers,
+      },
+    });
+    
+    const mockSupabase = {
+      auth: {
+        getUser: () => Promise.resolve({ data: { user: null }, error: new Error('Supabase not configured') }),
+      }
+    } as any;
+    
+    return { supabase: mockSupabase, response };
+  }
+  
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -53,8 +126,8 @@ export const createMiddlewareClient = (request: NextRequest) => {
   });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         get(name: string): string | undefined {
