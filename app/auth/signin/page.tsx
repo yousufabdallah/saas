@@ -34,20 +34,31 @@ export default function SignInPage() {
       toast.success('تم تسجيل الدخول بنجاح!');
       
       // التحقق من صلاحيات الأدمن
-      const { data: adminData, error: adminError } = await supabase
-        .from('platform_admins')
-        .select('user_id')
-        .eq('user_id', data.user?.id)
-        .single();
-      
-      console.log('Admin check result:', { adminData, adminError, userId: data.user?.id });
-      
-      if (adminData && !adminError) {
-        console.log('Redirecting to admin panel');
-        router.push('/admin');
-      } else {
-        console.log('Redirecting to regular dashboard');
-        router.push('/dashboard');
+      if (data.user?.id) {
+        console.log('Checking admin status for user:', data.user.id);
+        console.log('User email:', data.user.email);
+        
+        const { data: adminData, error: adminError } = await supabase
+          .from('platform_admins')
+          .select('user_id')
+          .eq('user_id', data.user.id)
+          .single();
+        
+        console.log('Admin check result:', { 
+          adminData, 
+          adminError: adminError?.message, 
+          userId: data.user.id,
+          userEmail: data.user.email 
+        });
+        
+        if (adminData && !adminError) {
+          console.log('✅ User is platform admin - redirecting to admin panel');
+          router.push('/admin');
+        } else {
+          console.log('❌ User is not platform admin - redirecting to dashboard');
+          console.log('Error details:', adminError);
+          router.push('/dashboard');
+        }
       }
       router.refresh();
     } catch (error) {
