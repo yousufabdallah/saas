@@ -1,279 +1,348 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Search, Store, Users, Calendar, DollarSign } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Mail, Lock, User, ArrowLeft, Store } from 'lucide-react';
 import { createBrowserClient } from '@/lib/supabase';
 import { toast } from 'sonner';
+import Link from 'next/link';
 
-interface Store {
-  id: string;
-  name: string;
-  slug: string;
-  plan: string;
-  active: boolean;
-  created_at: string;
-  owner_email?: string;
-  members_count?: number;
-  products_count?: number;
-}
-
-export default function AdminStoresPage() {
-  const [stores, setStores] = useState<Store[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
+export default function SignInPage() {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    confirmPassword: '',
+  });
   const router = useRouter();
   const supabase = createBrowserClient();
 
-  useEffect(() => {
-    checkAdminAndLoadStores();
-  }, []);
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
 
-  const checkAdminAndLoadStores = async () => {
     try {
-      // تجاوز مؤقت لمشاكل RLS
-      console.log('⚠️ [STORES PAGE] تجاوز مؤقت لمشاكل RLS');
-      await loadStores();
-    } catch (error) {
-      console.error('خطأ في التحقق من الصلاحيات:', error);
-      await loadStores(); // تحميل البيانات الافتراضية
-    }
-  };
-
-  const loadStores = async () => {
-    try {
-      setLoading(true);
+      console.log('🔐 [SIGNIN] محاولة تسجيل الدخول:', formData.email);
       
-      // استخدام بيانات افتراضية مؤقتاً
-      console.log('⚠️ [STORES PAGE] استخدام بيانات افتراضية');
-      const demoStores = [
-        {
-          id: '1',
-          name: 'متجر الإلكترونيات',
-          slug: 'electronics-store',
-          plan: 'pro',
-          active: true,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-1',
-          members_count: 3,
-          products_count: 25,
-        },
-        {
-          id: '2',
-          name: 'متجر الأزياء',
-          slug: 'fashion-store',
-          plan: 'basic',
-          active: true,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-2',
-          members_count: 1,
-          products_count: 15,
-        },
-        {
-          id: '3',
-          name: 'متجر الكتب',
-          slug: 'books-store',
-          plan: 'enterprise',
-          active: false,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-3',
-          members_count: 2,
-          products_count: 50,
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (error) {
+        console.error('❌ [SIGNIN] خطأ في تسجيل الدخول:', error);
+        toast.error('خطأ في تسجيل الدخول: ' + error.message);
+        return;
+      }
+
+      if (data.user) {
+        console.log('✅ [SIGNIN] تم تسجيل الدخول بنجاح:', data.user.email);
+        toast.success('تم تسجيل الدخول بنجاح');
+
+        // التحقق من صلاحيات الأدمن
+        try {
+          const { data: isAdmin, error: adminError } = await supabase
+            .rpc('check_platform_admin', { user_id: data.user.id });
+
+          if (!adminError && isAdmin) {
+            console.log('🔄 [SIGNIN] المستخدم أدمن منصة، توجيه إلى /admin');
+            router.push('/admin');
+          } else {
+            console.log('🔄 [SIGNIN] المستخدم عميل عادي، توجيه إلى /dashboard');
+            router.push('/dashboard');
+          }
+        } catch (adminCheckError) {
+          console.log('⚠️ [SIGNIN] تعذر فحص صلاحيات الأدمن، توجيه إلى /dashboard');
+          router.push('/dashboard');
         }
-      ];
-      setStores(demoStores);
+      }
     } catch (error) {
-      console.error('خطأ في تحميل المتاجر:', error);
-      toast.error('تم تحميل بيانات تجريبية مؤقتاً');
+      console.error('❌ [SIGNIN] خطأ عام في تسجيل الدخول:', error);
+      toast.error('حدث خطأ في تسجيل الدخول');
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleStoreStatus = async (storeId: string, currentStatus: boolean) => {
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (formData.password !== formData.confirmPassword) {
+      toast.error('كلمات المرور غير متطابقة');
+      return;
+    }
+
+    setLoading(true);
+
     try {
-      // محاكاة تغيير الحالة
+      console.log('📝 [SIGNUP] محاولة إنشاء حساب جديد:', formData.email);
       
-      await loadStores();
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+      if (error) {
+        console.error('❌ [SIGNUP] خطأ في إنشاء الحساب:', error);
+        toast.error('خطأ في إنشاء الحساب: ' + error.message);
+        return;
+      }
+
+      if (data.user) {
+        console.log('✅ [SIGNUP] تم إنشاء الحساب بنجاح:', data.user.email);
+        
+        // إنشاء متجر مجاني تلقائياً
+        try {
+          const storeName = `متجر ${formData.email.split('@')[0]}`;
+          const storeSlug = formData.email.split('@')[0].toLowerCase() + '-' + Math.random().toString(36).substring(2, 6);
+          
+          const { data: storeData, error: storeError } = await supabase
+            .from('stores')
+            .insert({
+              name: storeName,
+              slug: storeSlug,
+              owner_user_id: data.user.id,
+              plan: 'basic',
+              active: true,
+            })
+            .select()
+            .single();
+
+          if (!storeError && storeData) {
+            // إضافة المستخدم كمالك للمتجر
+            await supabase
+              .from('store_members')
+              .insert({
+                store_id: storeData.id,
+                user_id: data.user.id,
+                role: 'owner',
+              });
+
+            console.log('✅ [SIGNUP] تم إنشاء متجر مجاني:', storeName);
+            toast.success('تم إنشاء حسابك ومتجرك المجاني بنجاح!');
+          } else {
+            console.log('⚠️ [SIGNUP] تعذر إنشاء المتجر التلقائي');
+            toast.success('تم إنشاء حسابك بنجاح! يمكن إنشاء متجر لاحقاً');
+          }
+        } catch (storeCreationError) {
+          console.log('⚠️ [SIGNUP] خطأ في إنشاء المتجر التلقائي:', storeCreationError);
+          toast.success('تم إنشاء حسابك بنجاح! يمكن إنشاء متجر لاحقاً');
+        }
+
+        // تسجيل الدخول تلقائياً والتوجيه
+        router.push('/dashboard');
+      }
     } catch (error) {
-      console.error('خطأ في تغيير حالة المتجر:', error);
-      toast.error('حدث خطأ في تغيير حالة المتجر');
+      console.error('❌ [SIGNUP] خطأ عام في إنشاء الحساب:', error);
+      toast.error('حدث خطأ في إنشاء الحساب');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const filteredStores = stores.filter(store =>
-    store.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    store.slug.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const getPlanBadgeColor = (plan: string) => {
-    switch (plan) {
-      case 'pro':
-        return 'bg-purple-100 text-purple-800';
-      case 'enterprise':
-        return 'bg-blue-100 text-blue-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
-
-  const getPlanName = (plan: string) => {
-    switch (plan) {
-      case 'pro':
-        return 'احترافية';
-      case 'enterprise':
-        return 'مؤسسية';
-      default:
-        return 'أساسية';
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">جار تحميل المتاجر...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4 space-x-reverse">
-              <Button variant="ghost" onClick={() => router.push('/admin')}>
-                <ArrowLeft className="h-4 w-4 ml-2" />
-                العودة
-              </Button>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">إدارة المتاجر</h1>
-                <p className="text-gray-600 mt-1">
-                  عرض وإدارة جميع المتاجر في المنصة
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Search and Stats */}
-        <div className="mb-8">
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between mb-6">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="البحث في المتاجر..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <div className="flex items-center space-x-4 space-x-reverse">
-              <Badge variant="secondary">
-                إجمالي المتاجر: {stores.length}
-              </Badge>
-              <Badge variant="secondary" className="bg-green-100 text-green-800">
-                نشط: {stores.filter(s => s.active).length}
-              </Badge>
-              <Badge variant="secondary" className="bg-red-100 text-red-800">
-                غير نشط: {stores.filter(s => !s.active).length}
-              </Badge>
-            </div>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <Link href="/" className="inline-flex items-center space-x-2 space-x-reverse mb-6">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg"></div>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              SaaSy
+            </h1>
+          </Link>
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">
+            مرحباً بك
+          </h2>
+          <p className="text-gray-600">
+            سجل دخولك أو أنشئ حساب جديد للبدء
+          </p>
         </div>
 
-        {/* Stores Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredStores.map((store) => (
-            <Card key={store.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-center justify-between">
+        <Card className="shadow-xl border-0">
+          <CardContent className="p-6">
+            <Tabs defaultValue="signin" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="signin">تسجيل الدخول</TabsTrigger>
+                <TabsTrigger value="signup">إنشاء حساب</TabsTrigger>
+              </TabsList>
+
+              {/* Sign In Tab */}
+              <TabsContent value="signin">
+                <form onSubmit={handleSignIn} className="space-y-4">
+                  <div>
+                    <Label htmlFor="signin-email">البريد الإلكتروني</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        id="signin-email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => handleInputChange('email', e.target.value)}
+                        placeholder="your@email.com"
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="signin-password">كلمة المرور</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        id="signin-password"
+                        type="password"
+                        value={formData.password}
+                        onChange={(e) => handleInputChange('password', e.target.value)}
+                        placeholder="كلمة المرور"
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? (
+                      <div className="flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white ml-2"></div>
+                        جار تسجيل الدخول...
+                      </div>
+                    ) : (
+                      'تسجيل الدخول'
+                    )}
+                  </Button>
+                </form>
+              </TabsContent>
+
+              {/* Sign Up Tab */}
+              <TabsContent value="signup">
+                <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
                   <div className="flex items-center space-x-2 space-x-reverse">
-                    <Store className="h-5 w-5 text-blue-600" />
-                    <CardTitle className="text-lg">{store.name}</CardTitle>
+                    <Store className="h-5 w-5 text-green-600" />
+                    <p className="text-sm text-green-800 font-medium">
+                      🎉 متجر مجاني فوراً!
+                    </p>
                   </div>
-                  <Badge className={getPlanBadgeColor(store.plan)}>
-                    {getPlanName(store.plan)}
-                  </Badge>
+                  <p className="text-xs text-green-700 mt-1">
+                    سيتم إنشاء متجرك الإلكتروني المجاني تلقائياً عند التسجيل
+                  </p>
                 </div>
-                <CardDescription>
-                  {store.slug}.saasy.com
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <Users className="h-4 w-4 text-gray-500" />
-                      <span>الأعضاء</span>
+
+                <form onSubmit={handleSignUp} className="space-y-4">
+                  <div>
+                    <Label htmlFor="signup-email">البريد الإلكتروني</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        id="signup-email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => handleInputChange('email', e.target.value)}
+                        placeholder="your@email.com"
+                        className="pl-10"
+                        required
+                      />
                     </div>
-                    <span className="font-medium">{store.members_count}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <DollarSign className="h-4 w-4 text-gray-500" />
-                      <span>المنتجات</span>
-                    </div>
-                    <span className="font-medium">{store.products_count}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <Calendar className="h-4 w-4 text-gray-500" />
-                      <span>تاريخ الإنشاء</span>
-                    </div>
-                    <span className="font-medium">
-                      {new Date(store.created_at).toLocaleDateString('ar-SA')}
-                    </span>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <Badge 
-                      className={store.active 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                      }
-                    >
-                      {store.active ? 'نشط' : 'غير نشط'}
-                    </Badge>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => toggleStoreStatus(store.id, store.active)}
-                    >
-                      {store.active ? 'إلغاء التفعيل' : 'تفعيل'}
-                    </Button>
+                  <div>
+                    <Label htmlFor="signup-password">كلمة المرور</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        id="signup-password"
+                        type="password"
+                        value={formData.password}
+                        onChange={(e) => handleInputChange('password', e.target.value)}
+                        placeholder="كلمة المرور (6 أحرف على الأقل)"
+                        className="pl-10"
+                        minLength={6}
+                        required
+                      />
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+
+                  <div>
+                    <Label htmlFor="confirm-password">تأكيد كلمة المرور</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        id="confirm-password"
+                        type="password"
+                        value={formData.confirmPassword}
+                        onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
+                        placeholder="تأكيد كلمة المرور"
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? (
+                      <div className="flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white ml-2"></div>
+                        جار إنشاء الحساب...
+                      </div>
+                    ) : (
+                      <>
+                        <Store className="h-4 w-4 ml-2" />
+                        إنشاء حساب + متجر مجاني
+                      </>
+                    )}
+                  </Button>
+                </form>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+
+        {/* Back to Home */}
+        <div className="text-center mt-6">
+          <Link href="/">
+            <Button variant="ghost" className="text-gray-600">
+              <ArrowLeft className="h-4 w-4 ml-2" />
+              العودة للصفحة الرئيسية
+            </Button>
+          </Link>
         </div>
 
-        {filteredStores.length === 0 && (
-          <div className="text-center py-12">
-            <Store className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              لا توجد متاجر
-            </h3>
-            <p className="text-gray-600">
-              {searchTerm ? 'لم يتم العثور على متاجر تطابق البحث' : 'لم يتم إنشاء أي متاجر بعد'}
-            </p>
-          </div>
-        )}
+        {/* Demo Accounts */}
+        <Card className="mt-6 bg-blue-50 border-blue-200">
+          <CardHeader>
+            <CardTitle className="text-lg text-blue-900">حسابات تجريبية</CardTitle>
+            <CardDescription className="text-blue-700">
+              للاختبار السريع
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="bg-white p-3 rounded-md border">
+              <p className="text-sm font-medium text-gray-900 mb-1">حساب الأدمن:</p>
+              <p className="text-xs text-gray-600">البريد: yousufalbahlouli@hotmail.com</p>
+              <p className="text-xs text-gray-600">كلمة المرور: 96327566</p>
+            </div>
+            <div className="bg-white p-3 rounded-md border">
+              <p className="text-sm font-medium text-gray-900 mb-1">حساب عميل:</p>
+              <p className="text-xs text-gray-600">أنشئ حساب جديد للحصول على متجر مجاني</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
