@@ -21,7 +21,6 @@ export default function AdminPage() {
   });
   const router = useRouter();
   const supabase = createBrowserClient();
-  const supabase = createBrowserClient();
 
   useEffect(() => {
     const checkAdminAccess = async () => {
