@@ -34,15 +34,19 @@ export default function SignInPage() {
       toast.success('تم تسجيل الدخول بنجاح!');
       
       // التحقق من صلاحيات الأدمن
-      const { data: adminData } = await supabase
+      const { data: adminData, error: adminError } = await supabase
         .from('platform_admins')
         .select('user_id')
         .eq('user_id', data.user?.id)
         .single();
       
-      if (adminData) {
+      console.log('Admin check result:', { adminData, adminError, userId: data.user?.id });
+      
+      if (adminData && !adminError) {
+        console.log('Redirecting to admin panel');
         router.push('/admin');
       } else {
+        console.log('Redirecting to regular dashboard');
         router.push('/dashboard');
       }
       router.refresh();
