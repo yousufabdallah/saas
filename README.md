@@ -19,6 +19,13 @@
      - `anon public key`
      - `service_role key` (من Service Role)
 
+3. **تفعيل المصادقة بالبريد الإلكتروني**:
+   - انتقل إلى Authentication > Providers في لوحة تحكم Supabase
+   - ابحث عن "Email" في قائمة المزودين
+   - قم بتفعيله (Toggle ON)
+   - احفظ التغييرات
+   - **ملاحظة**: يمكنك إلغاء تفعيل "Confirm email" للتطوير
+
 ### 2. إعداد متغيرات البيئة
 
 1. **تحديث ملف `.env.local`**:
