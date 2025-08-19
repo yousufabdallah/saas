@@ -7,8 +7,13 @@ export const createServerSupabaseClient = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   
-  if (!supabaseUrl || !supabaseServiceKey) {
-    // Return a mock client for build-time when env vars are missing
+  if (!supabaseUrl || !supabaseServiceKey ||
+      supabaseUrl === 'https://your-project.supabase.co' ||
+      supabaseServiceKey === 'your_service_role_key_here') {
+    
+    console.warn('⚠️ Supabase Server غير مُعرّف');
+    
+    // إرجاع client وهمي
     return {
       auth: {
         getUser: () => Promise.resolve({ data: { user: null }, error: new Error('Supabase not configured') }),
@@ -33,23 +38,19 @@ export const createServerSupabaseClient = () => {
     } as any;
   }
   
-  return createClient(
-    supabaseUrl,
-    supabaseServiceKey,
-    {
-      auth: {
-        persistSession: false,
-      },
-    }
-  );
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false }
+  });
 };
 
 export const createRouteHandlerClient = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
-  if (!supabaseUrl || !supabaseAnonKey) {
-    // Return a mock client for build-time when env vars are missing
+  if (!supabaseUrl || !supabaseAnonKey ||
+      supabaseUrl === 'https://your-project.supabase.co' ||
+      supabaseAnonKey === 'your_anon_key_here') {
+    
     return {
       auth: {
         getUser: () => Promise.resolve({ data: { user: null }, error: new Error('Supabase not configured') }),
@@ -71,43 +72,39 @@ export const createRouteHandlerClient = () => {
   
   const cookieStore = cookies();
   
-  return createServerClient(
-    supabaseUrl,
-    supabaseAnonKey,
-    {
-      cookies: {
-        get(name: string): string | undefined {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions): void {
-          try {
-            cookieStore.set({ name, value, ...options });
-          } catch (error) {
-            // Handle cookie setting errors in server components
-          }
-        },
-        remove(name: string, options: CookieOptions): void {
-          try {
-            cookieStore.set({ name, value: '', ...options });
-          } catch (error) {
-            // Handle cookie removal errors in server components
-          }
-        },
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      get(name: string): string | undefined {
+        return cookieStore.get(name)?.value;
       },
-    }
-  );
+      set(name: string, value: string, options: CookieOptions): void {
+        try {
+          cookieStore.set({ name, value, ...options });
+        } catch (error) {
+          // Handle cookie setting errors
+        }
+      },
+      remove(name: string, options: CookieOptions): void {
+        try {
+          cookieStore.set({ name, value: '', ...options });
+        } catch (error) {
+          // Handle cookie removal errors
+        }
+      },
+    },
+  });
 };
 
 export const createMiddlewareClient = (request: NextRequest) => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
-  if (!supabaseUrl || !supabaseAnonKey) {
-    // Return a mock response for build-time when env vars are missing
+  if (!supabaseUrl || !supabaseAnonKey ||
+      supabaseUrl === 'https://your-project.supabase.co' ||
+      supabaseAnonKey === 'your_anon_key_here') {
+    
     const response = NextResponse.next({
-      request: {
-        headers: request.headers,
-      },
+      request: { headers: request.headers }
     });
     
     const mockSupabase = {
@@ -120,56 +117,30 @@ export const createMiddlewareClient = (request: NextRequest) => {
   }
   
   let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
+    request: { headers: request.headers }
   });
 
-  const supabase = createServerClient(
-    supabaseUrl,
-    supabaseAnonKey,
-    {
-      cookies: {
-        get(name: string): string | undefined {
-          return request.cookies.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions): void {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          });
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          });
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          });
-        },
-        remove(name: string, options: CookieOptions): void {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          });
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          });
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          });
-        },
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      get(name: string): string | undefined {
+        return request.cookies.get(name)?.value;
       },
-    }
-  );
+      set(name: string, value: string, options: CookieOptions): void {
+        request.cookies.set({ name, value, ...options });
+        response = NextResponse.next({
+          request: { headers: request.headers }
+        });
+        response.cookies.set({ name, value, ...options });
+      },
+      remove(name: string, options: CookieOptions): void {
+        request.cookies.set({ name, value: '', ...options });
+        response = NextResponse.next({
+          request: { headers: request.headers }
+        });
+        response.cookies.set({ name, value: '', ...options });
+      },
+    },
+  });
 
   return { supabase, response };
 };

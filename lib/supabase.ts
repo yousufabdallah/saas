@@ -4,12 +4,14 @@ export const createBrowserClient = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
+  // التحقق من وجود متغيرات البيئة
   if (!supabaseUrl || !supabaseAnonKey || 
-      supabaseUrl === 'your_supabase_project_url' || 
-      supabaseAnonKey === 'your_supabase_anon_key' ||
-      supabaseUrl === 'https://your-project.supabase.co' ||
+      supabaseUrl === 'https://your-project.supabase.co' || 
       supabaseAnonKey === 'your_anon_key_here') {
-    // Return a mock client for build-time when env vars are missing
+    
+    console.warn('⚠️ Supabase غير مُعرّف. يرجى إعداد متغيرات البيئة في .env.local');
+    
+    // إرجاع client وهمي للتطوير
     return {
       auth: {
         signInWithPassword: () => Promise.resolve({ 
@@ -25,25 +27,26 @@ export const createBrowserClient = () => {
         onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } })
       },
       from: () => ({
-        select: () => Promise.resolve({ data: [], error: null }),
-        insert: () => Promise.resolve({ 
-          data: null, 
-          error: new Error('يجب إعداد Supabase أولاً') 
+        select: () => ({
+          eq: () => ({
+            single: () => Promise.resolve({ data: null, error: null })
+          }),
+          single: () => Promise.resolve({ data: [], error: null })
         }),
-        update: () => Promise.resolve({ 
-          data: null, 
-          error: new Error('يجب إعداد Supabase أولاً') 
+        insert: () => ({
+          select: () => ({
+            single: () => Promise.resolve({ data: null, error: new Error('يجب إعداد Supabase أولاً') })
+          })
         }),
-        delete: () => Promise.resolve({ 
-          data: null, 
-          error: new Error('يجب إعداد Supabase أولاً') 
+        update: () => ({
+          eq: () => Promise.resolve({ data: null, error: new Error('يجب إعداد Supabase أولاً') })
+        }),
+        delete: () => ({
+          eq: () => Promise.resolve({ data: null, error: new Error('يجب إعداد Supabase أولاً') })
         })
       })
     } as any;
   }
   
-  return createClient(
-    supabaseUrl,
-    supabaseAnonKey
-  );
+  return createClient(supabaseUrl, supabaseAnonKey);
 };

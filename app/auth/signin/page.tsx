@@ -50,8 +50,8 @@ export default function SignInPage() {
       console.error('Sign in error:', error);
       toast.error(error instanceof Error ? error.message : 'خطأ في تسجيل الدخول');
       
-      // إذا كانت المشكلة في إعدادات Supabase، اعرض رسالة توضيحية
-      if (error instanceof Error && error.message.includes('Supabase')) {
+      // إذا كانت المشكلة في إعدادات Supabase، اعرض رسالة توضيحية  
+      if (error instanceof Error && error.message.includes('يجب إعداد Supabase')) {
         toast.error('يجب إعداد Supabase أولاً. تحقق من ملف .env.local', {
           duration: 5000,
         });
@@ -84,7 +84,7 @@ export default function SignInPage() {
       toast.error(error instanceof Error ? error.message : 'خطأ في إنشاء الحساب');
       
       // إذا كانت المشكلة في إعدادات Supabase، اعرض رسالة توضيحية
-      if (error instanceof Error && error.message.includes('Supabase')) {
+      if (error instanceof Error && error.message.includes('يجب إعداد Supabase')) {
         toast.error('يجب إعداد Supabase أولاً. تحقق من ملف .env.local', {
           duration: 5000,
         });
@@ -93,6 +93,7 @@ export default function SignInPage() {
       setLoading(false);
     }
   };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
