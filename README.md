@@ -12,10 +12,12 @@
 2. **انتقل إلى Authentication → Providers**
 3. **ابحث عن "Email" في قائمة المزودين**
 4. **قم بتفعيله (Toggle ON)**
-5. **احفظ التغييرات**
-6. **اختياري**: يمكنك إلغاء تفعيل "Confirm email" للتطوير
+5. **قم بإلغاء تفعيل "Confirm email" (Toggle OFF)** - مهم للتطوير
+6. **احفظ التغييرات**
 
-**بدون هذه الخطوة ستحصل على خطأ "Email signups are disabled"**
+**بدون هذه الخطوات ستحصل على الأخطاء التالية:**
+- "Email signups are disabled" 
+- "Email not confirmed"
 
 ### 1. إعداد Supabase
 
