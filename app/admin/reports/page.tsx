@@ -32,6 +32,7 @@ export default function AdminReportsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('month');
   const router = useRouter();
+  const supabase = createBrowserClient();
 
   useEffect(() => {
     checkAdminAndLoadReports();
