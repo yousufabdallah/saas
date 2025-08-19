@@ -76,7 +76,7 @@ export default function AdminPage() {
         setStats(prev => ({
           ...prev,
           totalStores: stores.length,
-          activeSubscriptions: stores.filter(s => s.active).length,
+          activeSubscriptions: stores.filter((s: { active: boolean }) => s.active).length,
         }));
       }
 
