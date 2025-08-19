@@ -49,6 +49,13 @@ export default function SignInPage() {
     } catch (error) {
       console.error('Sign in error:', error);
       toast.error(error instanceof Error ? error.message : 'خطأ في تسجيل الدخول');
+      
+      // إذا كانت المشكلة في إعدادات Supabase، اعرض رسالة توضيحية
+      if (error instanceof Error && error.message.includes('Supabase')) {
+        toast.error('يجب إعداد Supabase أولاً. تحقق من ملف .env.local', {
+          duration: 5000,
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -75,6 +82,13 @@ export default function SignInPage() {
     } catch (error) {
       console.error('Sign up error:', error);
       toast.error(error instanceof Error ? error.message : 'خطأ في إنشاء الحساب');
+      
+      // إذا كانت المشكلة في إعدادات Supabase، اعرض رسالة توضيحية
+      if (error instanceof Error && error.message.includes('Supabase')) {
+        toast.error('يجب إعداد Supabase أولاً. تحقق من ملف .env.local', {
+          duration: 5000,
+        });
+      }
     } finally {
       setLoading(false);
     }
