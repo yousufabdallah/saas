@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createMiddlewareClient } from '@/lib/supabase/server';
 
 export function middleware(req: NextRequest) {
-  // Handle authentication
-  const { supabase, response } = createMiddlewareClient(req);
+  const response = NextResponse.next();
   
   const host = req.headers.get('host') || '';
   const isLocal = host.startsWith('localhost') || host.startsWith('127.0.0.1');
