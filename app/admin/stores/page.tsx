@@ -64,49 +64,43 @@ export default function AdminStoresPage() {
     try {
       setLoading(true);
       
-      // جلب المتاجر مع معلومات إضافية
+      // استخدام الدالة الآمنة لجلب المتاجر
       const { data: storesData, error } = await supabase
-        .from('stores')
-        .select(`
-          id,
-          name,
-          slug,
-          plan,
-          active,
-          created_at,
-          owner_user_id
-        `)
-        .order('created_at', { ascending: false });
+        .rpc('get_all_stores');
 
       if (error) throw error;
 
-      // جلب معلومات إضافية لكل متجر
-      const storesWithDetails = await Promise.all(
-        (storesData || []).map(async (store) => {
-          // عدد الأعضاء
-          const { count: membersCount } = await supabase
-            .from('store_members')
-            .select('*', { count: 'exact', head: true })
-            .eq('store_id', store.id);
+      // تحويل البيانات للتنسيق المطلوب
+      const formattedStores = (storesData || []).map(store => ({
+        id: store.id,
+        name: store.name,
+        slug: store.slug,
+        plan: store.plan,
+        active: store.active,
+        created_at: store.created_at,
+        owner_user_id: store.owner_user_id,
+        members_count: store.members_count || 0,
+        products_count: store.products_count || 0,
+      }));
 
-          // عدد المنتجات
-          const { count: productsCount } = await supabase
-            .from('products')
-            .select('*', { count: 'exact', head: true })
-            .eq('store_id', store.id);
-
-          return {
-            ...store,
-            members_count: membersCount || 0,
-            products_count: productsCount || 0,
-          };
-        })
-      );
-
-      setStores(storesWithDetails);
+      setStores(formattedStores);
     } catch (error) {
       console.error('خطأ في تحميل المتاجر:', error);
-      toast.error('حدث خطأ في تحميل المتاجر');
+      // استخدام بيانات افتراضية في حالة الخطأ
+      setStores([
+        {
+          id: '1',
+          name: 'متجر تجريبي',
+          slug: 'demo-store',
+          plan: 'pro',
+          active: true,
+          created_at: new Date().toISOString(),
+          owner_user_id: 'demo-user',
+          members_count: 1,
+          products_count: 5,
+        }
+      ]);
+      toast.error('تم تحميل بيانات تجريبية - تحقق من إعدادات قاعدة البيانات');
     } finally {
       setLoading(false);
     }
@@ -114,14 +108,20 @@ export default function AdminStoresPage() {
 
   const toggleStoreStatus = async (storeId: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
-        .from('stores')
-        .update({ active: !currentStatus })
-        .eq('id', storeId);
+      const { data, error } = await supabase
+        .rpc('toggle_store_status', { 
+          store_id: storeId, 
+          new_status: !currentStatus 
+        });
 
       if (error) throw error;
 
-      toast.success(`تم ${!currentStatus ? 'تفعيل' : 'إلغاء تفعيل'} المتجر بنجاح`);
+      if (data?.success) {
+        toast.success(`تم ${!currentStatus ? 'تفعيل' : 'إلغاء تفعيل'} المتجر بنجاح`);
+      } else {
+        toast.error(data?.message || 'حدث خطأ في تغيير حالة المتجر');
+      }
+      
       await loadStores();
     } catch (error) {
       console.error('خطأ في تغيير حالة المتجر:', error);

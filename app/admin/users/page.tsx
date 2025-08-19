@@ -62,49 +62,42 @@ export default function AdminUsersPage() {
     try {
       setLoading(true);
       
-      // جلب المستخدمين من auth.users (يتطلب صلاحيات service role)
-      // نستخدم store_members للحصول على المستخدمين النشطين
-      const { data: membersData, error } = await supabase
-        .from('store_members')
-        .select(`
-          user_id,
-          created_at,
-          stores (
-            id,
-            name
-          )
-        `);
+      // استخدام الدالة الآمنة لجلب المستخدمين
+      const { data: usersData, error } = await supabase
+        .rpc('get_all_users');
 
       if (error) throw error;
 
-      // تجميع المستخدمين الفريدين
-      const uniqueUserIds = [...new Set(membersData?.map(m => m.user_id) || [])];
-      
-      // جلب أدمن المنصة
-      const { data: adminData } = await supabase
-        .from('platform_admins')
-        .select('user_id');
+      // تحويل البيانات للتنسيق المطلوب
+      const formattedUsers = (usersData || []).map(user => ({
+        id: user.user_id,
+        email: user.email,
+        created_at: user.created_at,
+        is_platform_admin: user.is_platform_admin,
+        stores_count: user.stores_count,
+      }));
 
-      const adminIds = new Set(adminData?.map(a => a.user_id) || []);
-
-      // إنشاء قائمة المستخدمين مع التفاصيل
-      const usersWithDetails = uniqueUserIds.map(userId => {
-        const userStores = membersData?.filter(m => m.user_id === userId) || [];
-        const firstStore = userStores[0];
-        
-        return {
-          id: userId,
-          email: `user-${userId.slice(0, 8)}@example.com`, // placeholder
-          created_at: firstStore?.created_at || new Date().toISOString(),
-          is_platform_admin: adminIds.has(userId),
-          stores_count: userStores.length,
-        };
-      });
-
-      setUsers(usersWithDetails);
+      setUsers(formattedUsers);
     } catch (error) {
       console.error('خطأ في تحميل المستخدمين:', error);
-      toast.error('حدث خطأ في تحميل المستخدمين');
+      // استخدام بيانات افتراضية في حالة الخطأ
+      setUsers([
+        {
+          id: 'demo-user-1',
+          email: 'user1@example.com',
+          created_at: new Date().toISOString(),
+          is_platform_admin: false,
+          stores_count: 1,
+        },
+        {
+          id: 'demo-user-2',
+          email: 'admin@example.com',
+          created_at: new Date().toISOString(),
+          is_platform_admin: true,
+          stores_count: 2,
+        }
+      ]);
+      toast.error('تم تحميل بيانات تجريبية - تحقق من إعدادات قاعدة البيانات');
     } finally {
       setLoading(false);
     }
@@ -112,23 +105,18 @@ export default function AdminUsersPage() {
 
   const toggleAdminStatus = async (userId: string, isCurrentlyAdmin: boolean) => {
     try {
-      if (isCurrentlyAdmin) {
-        // إزالة صلاحيات الأدمن
-        const { error } = await supabase
-          .from('platform_admins')
-          .delete()
-          .eq('user_id', userId);
+      const { data, error } = await supabase
+        .rpc('toggle_admin_status', { 
+          target_user_id: userId, 
+          is_admin: !isCurrentlyAdmin 
+        });
 
-        if (error) throw error;
-        toast.success('تم إزالة صلاحيات الأدمن بنجاح');
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success(data.message);
       } else {
-        // إضافة صلاحيات الأدمن
-        const { error } = await supabase
-          .from('platform_admins')
-          .insert({ user_id: userId });
-
-        if (error) throw error;
-        toast.success('تم إضافة صلاحيات الأدمن بنجاح');
+        toast.error(data?.message || 'حدث خطأ في تغيير صلاحيات الأدمن');
       }
 
       await loadUsers();
