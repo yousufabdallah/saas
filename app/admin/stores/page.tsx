@@ -44,170 +44,59 @@ export default function AdminStoresPage() {
       
       if (error || !user) {
         console.log('❌ [STORES PAGE] المستخدم غير مسجل دخول');
-        // تجاهز مؤقت لمشاكل RLS
-        // استخدام بيانات افتراضية مؤقتاً
-        console.log('⚠️ [STORES PAGE] استخدام بيانات افتراضية');
-        const demoStores = [
-          {
-            id: '1',
-            name: 'متجر الإلكترونيات',
-            slug: 'electronics-store',
-            plan: 'pro',
-            active: true,
-            created_at: new Date().toISOString(),
-            owner_user_id: 'demo-user-1',
-            owner_email: 'demo1@example.com',
-            members_count: 3,
-            products_count: 25,
-            orders_count: 10,
-            total_revenue: 1500.00
-          },
-          {
-            id: '2',
-            name: 'متجر الأزياء',
-            slug: 'fashion-store',
-            plan: 'basic',
-            active: true,
-            created_at: new Date().toISOString(),
-            owner_user_id: 'demo-user-2',
-            owner_email: 'demo2@example.com',
-            members_count: 1,
-            products_count: 15,
-            orders_count: 5,
-            total_revenue: 750.00
-          },
-          {
-            id: '3',
-            name: 'متجر الكتب',
-            slug: 'books-store',
-            plan: 'enterprise',
-            active: false,
-            created_at: new Date().toISOString(),
-            owner_user_id: 'demo-user-3',
-            owner_email: 'demo3@example.com',
-            members_count: 2,
-            products_count: 50,
-            orders_count: 20,
-            total_revenue: 2000.00
-          }
-        ];
-        setStores(demoStores);
-        toast.error('تم تحميل بيانات تجريبية مؤقتاً');
-      } else {
-        setStores([]);
+        router.push('/auth/signin');
+        return;
       }
+
+      console.log('✅ [STORES PAGE] المستخدم مسجل دخول:', user.email);
+
+      // التحقق من صلاحيات الأدمن
+      const { data: isAdmin, error: adminError } = await supabase
+        .rpc('check_platform_admin', { user_id: user.id });
+
+      if (adminError || !isAdmin) {
+        console.log('❌ [STORES PAGE] المستخدم ليس أدمن منصة');
+        toast.error('ليس لديك صلاحيات للوصول إلى هذه الصفحة');
+        router.push('/dashboard');
+        return;
+      }
+
+      console.log('✅ [STORES PAGE] المستخدم أدمن منصة مؤكد');
+      await loadRealStores();
     } catch (error) {
-      console.error('❌ [STORES PAGE] خطأ في تحميل المتاجر:', error);
-      setStores([]);
-    } finally {
-      setLoading(false);
+      console.error('❌ [STORES PAGE] خطأ في التحقق من الصلاحيات:', error);
+      toast.error('حدث خطأ في التحقق من الصلاحيات');
     }
   };
 
   const loadRealStores = async () => {
     try {
+      setLoading(true);
       console.log('🏪 [STORES PAGE] تحميل المتاجر الحقيقية...');
       
-      // محاولة استخدام الدالة المحدثة أولاً
-      const { data: storesData, error: storesError } = await supabase
-        .rpc('get_all_real_stores');
+      // استخدام الدالة الجديدة للمتاجر الحقيقية
+      const { data: realStores, error } = await supabase.rpc('get_all_real_stores');
 
-      if (storesError) {
-        console.log('⚠️ [STORES PAGE] خطأ في الدالة المحدثة، محاولة استعلام مباشر:', storesError);
-        
-        // استعلام مباشر كبديل
-        const { data: directStores, error: directError } = await supabase
-          .from('stores')
-          .select(`
-            id, name, slug, plan, active, created_at, owner_user_id
-          `)
-          .order('created_at', { ascending: false });
-
-        if (directError) {
-          console.error('❌ [STORES PAGE] خطأ في الاستعلام المباشر أيضاً:', directError);
-          
-          // استخدام بيانات افتراضية كحل أخير
-          setStores([
-            {
-              id: 'demo-store-1',
-              name: 'متجر تجريبي',
-              slug: 'demo-store',
-              plan: 'basic',
-              active: true,
-              created_at: new Date().toISOString(),
-              owner_user_id: 'demo-user-1',
-              owner_email: 'demo@example.com',
-              members_count: 1,
-              products_count: 0,
-              orders_count: 0,
-              total_revenue: 0,
-            }
-          ]);
-          toast.error('خطأ في تحميل البيانات - عرض بيانات تجريبية');
-          return;
-        }
-
-        // تحويل البيانات المباشرة
-        const mappedStores = (directStores || []).map((store: any) => ({
-          id: store.id,
-          name: store.name,
-          slug: store.slug,
-          plan: store.plan,
-          active: store.active,
-          created_at: store.created_at,
-          owner_user_id: store.owner_user_id,
-          owner_email: `user-${store.owner_user_id.slice(0, 8)}@example.com`,
-          members_count: 1,
-          products_count: 0,
-          orders_count: 0,
-          total_revenue: 0,
-        }));
-        
-        setStores(mappedStores);
-        console.log('✅ [STORES PAGE] تم تحميل', mappedStores.length, 'متجر من الاستعلام المباشر');
+      if (error) {
+        console.error('❌ [STORES PAGE] خطأ في تحميل المتاجر:', error);
+        toast.error('حدث خطأ في تحميل المتاجر: ' + error.message);
+        setStores([]);
         return;
       }
 
-      // استخدام بيانات الدالة
-      const mappedStores = (storesData || []).map((store: any) => ({
-        id: store.id,
-        name: store.name,
-        slug: store.slug,
-        plan: store.plan,
-        active: store.active,
-        created_at: store.created_at,
-        owner_user_id: store.owner_user_id,
-        owner_email: store.owner_email || 'unknown@example.com',
-        members_count: store.members_count || 0,
-        products_count: store.products_count || 0,
-        orders_count: store.orders_count || 0,
-        total_revenue: store.total_revenue || 0,
-      }));
+      console.log('✅ [STORES PAGE] تم تحميل المتاجر الحقيقية:', realStores?.length || 0);
+      console.log('📋 [STORES PAGE] قائمة المتاجر:', realStores);
 
-      setStores(mappedStores);
-      console.log('✅ [STORES PAGE] تم تحميل', mappedStores.length, 'متجر من الدالة المحدثة');
+      setStores(realStores || []);
 
+      if (!realStores || realStores.length === 0) {
+        console.log('⚠️ [STORES PAGE] لا توجد متاجر حقيقية');
+        toast.info('لا توجد متاجر حقيقية بعد. سيتم إنشاء متاجر عند تسجيل المستخدمين.');
+      }
     } catch (error) {
       console.error('❌ [STORES PAGE] خطأ في تحميل المتاجر:', error);
-      
-      // استخدام بيانات افتراضية في حالة الخطأ الكامل
-      setStores([
-        {
-          id: 'demo-store-1',
-          name: 'متجر تجريبي',
-          slug: 'demo-store',
-          plan: 'basic',
-          active: true,
-          created_at: new Date().toISOString(),
-          owner_user_id: 'demo-user-1',
-          owner_email: 'demo@example.com',
-          members_count: 1,
-          products_count: 0,
-          orders_count: 0,
-          total_revenue: 0,
-        }
-      ]);
-      toast.error('خطأ في تحميل البيانات - عرض بيانات تجريبية');
+      toast.error('حدث خطأ في تحميل المتاجر');
+      setStores([]);
     } finally {
       setLoading(false);
     }
@@ -215,42 +104,30 @@ export default function AdminStoresPage() {
 
   const toggleStoreStatus = async (storeId: string, currentStatus: boolean) => {
     try {
-      // محاولة تحديث حالة المتجر مباشرة
-      const { error } = await supabase
-        .from('stores')
-        .update({ active: !currentStatus })
-        .eq('id', storeId);
+      console.log('🔧 [STORES PAGE] تغيير حالة المتجر:', storeId);
+      
+      const { data: result, error } = await supabase.rpc('toggle_store_status_safe', {
+        store_id: storeId,
+        new_status: !currentStatus,
+      });
 
       if (error) {
-        console.error('❌ [STORES PAGE] خطأ في تحديث حالة المتجر:', error);
-        throw error;
+        console.error('❌ [STORES PAGE] خطأ في تغيير حالة المتجر:', error);
+        toast.error('حدث خطأ في تغيير حالة المتجر');
+        return;
       }
 
-      toast.success(`تم ${!currentStatus ? 'تفعيل' : 'إلغاء تفعيل'} المتجر بنجاح`);
-      await loadRealStores();
+      console.log('✅ [STORES PAGE] نتيجة تغيير الحالة:', result);
+
+      if (result?.success) {
+        toast.success(result.message);
+        await loadRealStores();
+      } else {
+        toast.error(result?.message || 'فشل في تغيير حالة المتجر');
+      }
     } catch (error) {
       console.error('❌ [STORES PAGE] خطأ في تغيير حالة المتجر:', error);
-      
-      // محاولة استخدام دالة آمنة كبديل
-      try {
-        const { data: result, error: rpcError } = await supabase
-          .rpc('toggle_store_status_safe', {
-            store_id: storeId,
-            new_status: !currentStatus
-          });
-
-        if (rpcError) throw rpcError;
-
-        if (result?.success) {
-          toast.success(result.message);
-          await loadRealStores();
-        } else {
-          toast.error(result?.message || 'فشل في تغيير حالة المتجر');
-        }
-      } catch (rpcError) {
-        console.error('❌ [STORES PAGE] فشل في جميع المحاولات:', rpcError);
-        toast.error('حدث خطأ في تغيير حالة المتجر');
-      }
+      toast.error('حدث خطأ في تغيير حالة المتجر');
     }
   };
 
